@@ -7,8 +7,9 @@ build/
 dist/*.exe
 installer/*.exe
 
-# 随项目安装的第三方依赖（见 build_exe.bat 里的 pip 命令）
+# 随项目安装的第三方依赖与构建工具
 vendor/
+tools/
 *.spec
 
 # Python 缓存

@@ -14,7 +14,7 @@ Unicode true
 
 Name "${APPNAME}"
 BrandingText "${APPNAME} ${APPVERSION}"
-OutFile "${__FILEDIR__}\..\dist\TagPot-Setup-${APPVERSION}.exe"
+OutFile "..\dist\TagPot-Setup-${APPVERSION}.exe"
 InstallDir "$LOCALAPPDATA\Programs\TagPot"
 InstallDirRegKey HKCU "Software\TagPot" "InstallDir"
 RequestExecutionLevel user
@@ -27,11 +27,16 @@ VIAddVersionKey /LANG=2052 "CompanyName"     "${PUBLISHER}"
 VIAddVersionKey /LANG=2052 "FileDescription" "Tag Pot 安装程序"
 VIAddVersionKey /LANG=2052 "FileVersion"     "${APPVERSION}"
 VIAddVersionKey /LANG=2052 "ProductVersion"  "${APPVERSION}"
+VIAddVersionKey /LANG=2052 "LegalCopyright"  "Copyright (C) 2026 yumng666"
 
 !include "MUI2.nsh"
 
-!define MUI_ICON   "${__FILEDIR__}\..\assets\tagpot.ico"
-!define MUI_UNICON "${__FILEDIR__}\..\assets\tagpot.ico"
+!define MUI_ICON   "..\assets\tagpot.ico"
+!define MUI_UNICON "..\assets\tagpot.ico"
+!define MUI_WELCOMEFINISHPAGE_BITMAP "welcome.bmp"
+!define MUI_HEADERIMAGE
+!define MUI_HEADERIMAGE_BITMAP "header.bmp"
+!define MUI_HEADERIMAGE_RIGHT
 !define MUI_ABORTWARNING
 !define MUI_FINISHPAGE_RUN "$INSTDIR\${APPEXE}"
 !define MUI_FINISHPAGE_RUN_TEXT "立即启动 Tag Pot"
@@ -59,7 +64,7 @@ Section "!Tag Pot" SecMain
   SectionIn RO
   SetOutPath "$INSTDIR"
   SetOverwrite try
-  File "${__FILEDIR__}\..\dist\TagPot.exe"
+  File "..\dist\TagPot.exe"
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   CreateDirectory "$SMPROGRAMS\Tag Pot"

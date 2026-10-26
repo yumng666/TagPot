@@ -5,19 +5,31 @@
 
 ![概览](tests/shots/01-initial.png)
 
-## 运行
+## 安装
 
-双击 **`dist/TagPot.exe`** —— 单文件 34 MB，不需要安装 Python，不打开浏览器，没有控制台。
+到 [Releases](https://github.com/yumng666/TagPot/releases/latest) 下载：
 
-- 冷启动约 2.7 秒（单文件要先解包），之后窗口秒开。
-- 首次运行会在 exe 旁边生成 `data/`：配置、缩略图缓存、WebView2 用户数据，
-  以及一份可直接浏览的演示相册（`data/demo`）。
+| 文件 | 说明 |
+| --- | --- |
+| `TagPot-Setup-1.0.0.exe` | **安装版**（推荐）。一路「下一步」即可，装到 `%LOCALAPPDATA%\Programs\TagPot`，全程不需要管理员权限；自带开始菜单、桌面快捷方式和卸载项，可在「设置 → 应用」里卸载。 |
+| `TagPot.exe` | **绿色版**。单文件约 33 MB，放进任意可写目录双击运行。 |
+
+两者运行表现一致：
+
+- 冷启动约 2.7 秒（单文件要先自解包），之后窗口秒开。
+- 用户数据（配置、缩略图缓存、WebView2 数据、演示相册副本）在 `%LOCALAPPDATA%\TagPot`；
+  绿色版若同目录已有 `data\`，则沿用那一份，方便放 U 盘带着走。
 - 窗口尺寸按屏幕自动取（1360×880 上限，小屏自动收），最小 960×600；任务栏按独立应用归组。
 - 关掉窗口即退出，后台服务随之结束。
 - 若 Windows 弹 SmartScreen，是因为 exe 没有代码签名：点「更多信息 → 仍要运行」。
 
-改代码时用源码跑，双击 `run.bat`（走 `app.py`，同样不开浏览器）；
-改完要重新出包，双击 `build_exe.bat`。
+## 从源码构建
+
+```
+run.bat              # 直接从源码启动（走 app.py，同样不开浏览器）
+build_exe.bat        # 打 dist\TagPot.exe（需 pyinstaller，依赖装到 vendor\）
+build_installer.bat  # 打 dist\TagPot-Setup-<版本>.exe（需 NSIS 解压到 tools\nsis\）
+```
 
 ## 交互
 
@@ -63,7 +75,9 @@
 ```
 tag-pot/
 ├─ dist/TagPot.exe         # ★ 成品：单文件桌面程序
-├─ build_exe.bat           # 重新打包
+├─ build_exe.bat           # 打包单文件 exe
+├─ build_installer.bat     # 生成安装包
+├─ installer/tagpot.nsi    # NSIS 安装脚本（每用户安装，免管理员）
 ├─ run.bat                 # 源码方式启动（开发用）
 ├─ app.py                  # 桌面外壳：WebView2 原生窗口 + 本地服务
 ├─ server.py               # 后端：图片 / 缩略图 / EXIF 备注（也可单独跑，纯接口）
