@@ -1,0 +1,16 @@
+# 运行期数据（配置、缩略图缓存、WebView2 用户数据、演示相册副本）
+data/
+dist/data/
+
+# 构建产物：exe 与安装包只作为 Release 资产发布，不进仓库
+build/
+dist/*.exe
+installer/*.exe
+
+# 随项目安装的第三方依赖（见 build_exe.bat 里的 pip 命令）
+vendor/
+*.spec
+
+# Python 缓存
+__pycache__/
+*.pyc
