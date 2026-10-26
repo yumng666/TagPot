@@ -16,6 +16,8 @@
 
 ![安装界面](tests/shots/08-setup.png)
 
+![安装界面](tests/shots/08-setup.png)
+
 两者运行表现一致：
 
 - 冷启动约 2.7 秒（单文件要先自解包），之后窗口秒开。
