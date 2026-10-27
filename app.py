@@ -84,9 +84,18 @@ def _install_webview2_hooks():
 
 
 def _seed_demo():
-    """首次运行时把随包演示素材复制到 data/demo，并写好配置。"""
+    """首次运行时把随包演示素材复制到 data/demo，并写好配置。
+
+    用 .seeded 标记防止重复播种；若用户已经有自己的根目录，绝不覆盖。
+    （配置意外被清空时，这里能让演示相册回来。）
+    """
     try:
-        if os.path.exists(server.CONFIG_PATH):
+        marker = os.path.join(server.DATA_DIR, ".seeded")
+        cfg = server._load_json(server.CONFIG_PATH, None) or {}
+        if cfg.get("roots"):
+            open(marker, "w").write("1")
+            return
+        if os.path.exists(marker):
             return
         src = server.DEMO_DIR
         if not os.path.isdir(src):
@@ -99,7 +108,7 @@ def _seed_demo():
             p = os.path.join(dst, name)
             if os.path.isdir(p):
                 roots.append({"id": server._rid(p), "path": p})
-        if roots:
+        if roots and not cfg.get("roots"):
             # 优先选中带子文件夹的那个，首屏就能看到展开效果
             active = roots[0]["id"]
             for r in roots:
@@ -110,6 +119,7 @@ def _seed_demo():
                 except Exception:
                     pass
             server._save_json(server.CONFIG_PATH, {"roots": roots, "active": active})
+        open(marker, "w").write("1")
     except Exception:
         pass
 

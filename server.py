@@ -17,6 +17,7 @@ import json
 import mimetypes
 import os
 import re
+import shutil
 import string
 import sys
 import threading
@@ -126,11 +127,21 @@ def _save_json(path, data):
     tmp = path + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    if os.path.exists(path):
+        try:
+            shutil.copyfile(path, path + ".bak")
+        except Exception:
+            pass
     os.replace(tmp, path)
 
 
 def load_state():
-    raw = _load_json(CONFIG_PATH, {"roots": [], "active": None})
+    raw = _load_json(CONFIG_PATH, None)
+    if raw is None:
+        # 主文件读不到（不存在 / 被占用 / 损坏）：先试备份，别急着用空配置
+        raw = _load_json(CONFIG_PATH + ".bak", {"roots": [], "active": None})
+        if raw is None:
+            raw = {"roots": [], "active": None}
     roots = []
     seen = set()
     for r in raw.get("roots", []):
