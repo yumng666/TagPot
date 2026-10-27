@@ -527,6 +527,18 @@ async function loadFolder(node) {
     $('#stageName').textContent = d.name;
     $('#stageSub').textContent = d.path;
     syncImages(d.images || [], true);
+    if (!(d.images || []).length && token === S.loadToken) {
+      // 这个文件夹本身没有图片：看看图片是不是都在子文件夹里
+      try {
+        const dd = await api('/api/dirs?path=' + enc(node.path));
+        if (token !== S.loadToken) return;
+        if ((dd.dirs || []).length) {
+          setEmptyCopy('这个文件夹没有图片', '图片都在子文件夹里，点左侧的子文件夹看看');
+        } else {
+          setEmptyCopy('这个文件夹没有图片', '把图片放进来后点右上角刷新，或换一个文件夹');
+        }
+      } catch (e) { }
+    }
   } catch (e) {
     toast(e.message, 'bad');
   }
@@ -656,8 +668,14 @@ function renderEmpty(msg) {
   $('#stageName').textContent = msg || '未选择文件夹';
   $('#stageSub').textContent = '在左侧添加或选择一个文件夹';
   $('#countPill').textContent = '0 张';
+  setEmptyCopy('还没有文件夹', '点左上角「添加文件夹」，或把文件夹直接拖到那个按钮上');
   $('#empty').classList.add('on');
   layout();
+}
+
+function setEmptyCopy(title, hint) {
+  $('#emptyTitle').textContent = title;
+  $('#emptyHint').textContent = hint;
 }
 
 /* ------------------------------------------------------------ 轮询刷新 */
