@@ -136,12 +136,22 @@ def _save_json(path, data):
 
 
 def load_state():
-    raw = _load_json(CONFIG_PATH, None)
+    raw = None
+    for attempt in range(3):
+        raw = _load_json(CONFIG_PATH, None)
+        if raw is not None:
+            break
+        if not os.path.exists(CONFIG_PATH):
+            break                     # 文件确实不存在（首次运行）
+        time.sleep(0.15)              # 大概率是被杀软/索引器短暂占用，重试
     if raw is None:
-        # 主文件读不到（不存在 / 被占用 / 损坏）：先试备份，别急着用空配置
-        raw = _load_json(CONFIG_PATH + ".bak", {"roots": [], "active": None})
-        if raw is None:
-            raw = {"roots": [], "active": None}
+        raw = _load_json(CONFIG_PATH + ".bak", None)
+        if raw is not None and os.environ.get("TAGPOT_LOG"):
+            _log("[config] 主配置读取失败，已从 .bak 恢复")
+    if raw is None:
+        raw = {"roots": [], "active": None}
+        if os.path.exists(CONFIG_PATH) and os.environ.get("TAGPOT_LOG"):
+            _log("[config] 主配置与备份都读不出来，按空配置启动（暂不覆盖磁盘）")
     roots = []
     seen = set()
     for r in raw.get("roots", []):
@@ -154,8 +164,21 @@ def load_state():
     STATE["active"] = raw.get("active")
 
 
+_allow_empty_save = False
+
+
 def save_state():
+    global _allow_empty_save
+    if not STATE["roots"] and not _allow_empty_save:
+        # 防御：内存里的根目录是空的，但磁盘上明明有 —— 八成是启动时读取失败，
+        # 这时候绝不能把用户的根目录列表覆盖掉
+        cfg = _load_json(CONFIG_PATH, None) or {}
+        if cfg.get("roots"):
+            if os.environ.get("TAGPOT_LOG"):
+                _log("[config] 拒绝用空 roots 覆盖已有配置")
+            return
     _save_json(CONFIG_PATH, {"roots": STATE["roots"], "active": STATE["active"]})
+    _allow_empty_save = False
 
 
 def _rid(path: str) -> str:
@@ -1231,6 +1254,9 @@ class Handler(BaseHTTPRequestHandler):
                 STATE["roots"] = [r for r in STATE["roots"] if r["id"] != rid]
                 if STATE["active"] == rid:
                     STATE["active"] = None
+                if not STATE["roots"]:
+                    global _allow_empty_save
+                    _allow_empty_save = True   # 用户主动删光，允许保存空列表
                 save_state()
             return self._send(200, {"roots": [root_payload(r) for r in STATE["roots"]]})
 
