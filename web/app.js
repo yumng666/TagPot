@@ -545,10 +545,6 @@ async function loadFolder(node) {
     $('#stageName').textContent = d.name;
     $('#stageSub').textContent = d.path;
     syncImages(d.images || [], true);
-    api('/api/autowrite', {
-      method: 'POST',
-      body: JSON.stringify({ path: d.path })
-    }).catch(() => { });   // 后台批量写入备注；失败不影响浏览
     if (!(d.images || []).length && token === S.loadToken) {
       // 这个文件夹本身没有图片：看看图片是不是都在子文件夹里
       try {
@@ -631,7 +627,7 @@ function syncImages(images, reset) {
   next.forEach(it => {
     const rec = S.tiles.get(it.path);
     if (rec) {
-      // mtime/size 变化通常只是元数据被更新（如后台写入备注），
+      // mtime/size 变化通常只是元数据被外部工具更新，
       // 像素没变，不重载缩略图；像素真的变了用右上角「刷新」
       rec.item = it;
     } else {
@@ -894,12 +890,12 @@ async function showModal(i) {
       property: '图片属性 · 关闭弹窗自动保存',
       exif: '图片属性（EXIF）· 关闭弹窗自动保存',
       generated: '自动读取自生成参数 · 关闭弹窗自动保存',
-      sidecar: '该格式无法写入文件属性，备注只存在应用内'
+      sidecar: '该格式无法写入文件属性，提示词只存在应用内'
     };
     $('#mNoteSrc').textContent = srcText[m.commentSource] || srcText.property;
     fillGen(m.gen);
   } catch (e) {
-    if (token === S.metaToken) note.placeholder = '备注读取失败';
+    if (token === S.metaToken) note.placeholder = '提示词读取失败';
   }
 }
 
@@ -910,7 +906,7 @@ async function closeModal() {
   await persistModal();
 }
 
-/** 保存当前弹窗里的备注与模型/Lora，切图或关闭时调用 */
+/** 保存当前弹窗里的提示词与模型/Lora，切图或关闭时调用 */
 async function persistModal() {
   const it = S.images[S.modalIdx];
   if (!it) return;
@@ -925,9 +921,9 @@ async function persistModal() {
       });
       it.comment = note;
       if (S.images[S.modalIdx] && S.images[S.modalIdx].path === path) S.noteOriginal = note;
-      toast('备注已保存');
+      toast('提示词已保存');
     } catch (e) {
-      toast('备注保存失败：' + e.message, 'bad');
+      toast('提示词保存失败：' + e.message, 'bad');
     }
   }
   await saveGen(path);
