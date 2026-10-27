@@ -261,23 +261,24 @@ def _scan_dirs(path: str, with_children_hint=True):
     return out
 
 
+_DIRS_TTL = 1.2   # 秒：侧栏要按「修改时间」实时刷新，缓存只做短去抖
+
+
 def list_dirs(path: str, with_children_hint=True):
-    """列出子目录（带缓存，轮询时不必反复扫盘）。"""
-    try:
-        st = os.stat(path)
-    except Exception:
-        return []
+    """列出子目录。带短 TTL 缓存：既挡住高频轮询的重复扫盘，
+    又能在一两秒内拿到子文件夹最新的修改时间（新图写入后顺序立即跟上）。"""
     key = (path, with_children_hint)
+    now = time.time()
     hit = _dirs_cache.get(key)
-    if hit and hit[0] == st.st_mtime_ns:
+    if hit and (now - hit[0]) < _DIRS_TTL:
         return hit[1]
     try:
         out = _scan_dirs(path, with_children_hint)
     except Exception:
-        return []
+        return hit[1] if hit else []
     if len(_dirs_cache) > 300:
         _dirs_cache.clear()
-    _dirs_cache[key] = (st.st_mtime_ns, out)
+    _dirs_cache[key] = (now, out)
     return out
 
 
