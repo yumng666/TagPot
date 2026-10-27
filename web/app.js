@@ -253,7 +253,6 @@ function selectNode(node) {
   node.itemEl.classList.add('active');
   placeSel();
   chase();
-  setPath(node.path);
   node.itemEl.scrollIntoView({ block: 'nearest' });
   loadFolder(node);
   api('/api/active', { method: 'POST', body: JSON.stringify({ id: node.id }) }).catch(() => {});
@@ -487,13 +486,6 @@ async function syncTree(hintPath, dirsHint) {
   }
 }
 
-function setPath(p) {
-  const bar = $('#pathBar');
-  const t = $('#pathText');
-  t.textContent = p;
-  bar.title = p;
-}
-
 /* ------------------------------------------------------------ 右侧：瀑布流 */
 async function loadFolder(node) {
   const token = ++S.loadToken;
@@ -623,7 +615,6 @@ function updateHeader() {
   const n = S.images.length;
   $('#countPill').textContent = n + ' 张';
   $('#empty').classList.toggle('on', n === 0);
-  $('#footStat').textContent = S.active ? '实时监听中' : '未选择文件夹';
 }
 
 function renderEmpty(msg) {
@@ -685,7 +676,7 @@ function makeLoraRow(item) {
   str.className = 'gen-input gen-str lora-str';
   str.title = 'Lora 强度';
   const v = item.strength;
-  str.value = (v === null || v === undefined) ? 1 : v;
+  str.value = (v === null || v === undefined || v === '') ? '' : v;
 
   row.appendChild(name);
   row.appendChild(str);
@@ -714,7 +705,7 @@ function renderLoras(loras) {
   box.textContent = '';
   const list = Array.isArray(loras) ? loras.filter((l) => l && l.name) : [];
   if (!list.length) {
-    box.appendChild(makeLoraRow({ name: '', strength: 1 }));
+    box.appendChild(makeLoraRow({ name: '', strength: null }));
   } else {
     list.forEach((it) => box.appendChild(makeLoraRow(it)));
   }

@@ -110,35 +110,6 @@ body {
   margin-top: 2px;
 }
 
-/* --- 当前路径 --- */
-.path-bar {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: var(--blue-50);
-  border: 1px solid var(--blue-100);
-  color: var(--ink-2);
-  min-height: 34px;
-}
-
-.path-ico { width: 15px; height: 15px; flex: none; color: var(--blue-500); }
-
-.path-text {
-  font-size: 11px;
-  line-height: 1.42;
-  flex: 1;
-  min-width: 0;
-  direction: ltr;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-all;
-  font-variant-numeric: tabular-nums;
-}
-
 /* --- 添加按钮 --- */
 .add-wrap { position: relative; }
 
@@ -353,29 +324,6 @@ body {
 
 .depth-2 .item { margin-left: 28px; font-size: 12px; }
 
-/* --- 侧栏底部 --- */
-.sidebar-foot {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 6px 2px;
-  border-top: 1px solid var(--line-2);
-  font-size: 10.5px;
-  color: var(--ink-3);
-  letter-spacing: .2px;
-}
-
-.live-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #35c07a;
-  box-shadow: 0 0 0 0 rgba(53, 192, 122, .5);
-  animation: pulse 2.4s infinite;
-}
-
-@keyframes pulse {
-  0%   { box-shadow: 0 0 0 0 rgba(53, 192, 122, .45); }
   70%  { box-shadow: 0 0 0 7px rgba(53, 192, 122, 0); }
   100% { box-shadow: 0 0 0 0 rgba(53, 192, 122, 0); }
 }
@@ -784,10 +732,10 @@ body {
 #mModel { flex: 1; }
 
 .gen-str {
-  width: 62px;
+  width: 46px;
   flex: none;
   text-align: right;
-  padding: 0 7px;
+  padding: 0 5px;
 }
 
 .gen-str::-webkit-inner-spin-button,
@@ -812,11 +760,12 @@ body {
 }
 
 .lora-item .lora-name { flex: 1; }
-.lora-item .lora-str { width: 58px; }
+.lora-item .lora-str { width: 44px; }
 
 .lora-add-row {
   display: flex;
-  padding: 2px 0 0 2px;
+  justify-content: flex-end;
+  padding: 2px 0 0;
 }
 
 /* 线条圆形 + 号，只出现在最后一行 Lora 的右侧 */

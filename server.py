@@ -378,6 +378,44 @@ def _base_name(v):
     return os.path.basename((v or "").replace("\\", "/"))
 
 
+MODEL_EXTS = {".safetensors", ".pt", ".pth", ".ckpt", ".bin", ".gguf", ".onnx", ".sft"}
+
+
+def _pretty_name(v):
+    """去掉目录与常见权重后缀，界面上显示纯名字。"""
+    n = _base_name(v)
+    root, ext = os.path.splitext(n)
+    return root if ext.lower() in MODEL_EXTS else n
+
+
+def _parse_lora_list(val):
+    """AnimaMultiLoraLoader 这类节点把 lora 列表放在一个 JSON 字符串输入里。
+
+    形如 [{"name":"xx.safetensors","strength":1,"enabled":true}]；
+    enabled 为 false 的不显示。
+    """
+    if isinstance(val, str):
+        if not val.strip().startswith("["):
+            return []
+        try:
+            val = json.loads(val)
+        except Exception:
+            return []
+    if not isinstance(val, list):
+        return []
+    out = []
+    for it in val:
+        if not isinstance(it, dict):
+            continue
+        if it.get("enabled") is False:
+            continue
+        name = _pretty_name(it.get("name") or "")
+        if not name:
+            continue
+        out.append({"name": name, "strength": _num(it.get("strength"), 1.0)})
+    return out
+
+
 def _anno_all():
     try:
         mtime = os.stat(ANNO_PATH).st_mtime_ns
@@ -485,14 +523,19 @@ def _parse_comfy(nodes):
         inputs = node.get("inputs") or {}
         if not model and ct in ("CheckpointLoaderSimple", "CheckpointLoader",
                                 "ImageOnlyCheckpointLoader"):
-            model = _base_name(inputs.get("ckpt_name"))
+            model = _pretty_name(inputs.get("ckpt_name"))
         if not model and ct in ("UNETLoader", "UnetLoaderGGUF"):
-            model = _base_name(inputs.get("unet_name"))
+            model = _pretty_name(inputs.get("unet_name"))
         if ct in ("LoraLoader", "LoraLoaderModelOnly"):
-            name = _base_name(inputs.get("lora_name"))
+            name = _pretty_name(inputs.get("lora_name"))
             if name:
                 loras.append({"name": name,
                               "strength": _num(inputs.get("strength_model"), 1.0)})
+        # 其它加载器：凡输入里带 lora 字样的 JSON 列表都认（AnimaMultiLoraLoader 等）
+        for key, val in inputs.items():
+            if "lora" not in key.lower():
+                continue
+            loras.extend(_parse_lora_list(val))
     return model, loras, _comfy_prompt(nodes)
 
 
@@ -510,7 +553,8 @@ def _extract_comfy(text):
     if not isinstance(sample, dict) or "class_type" not in sample:
         return None
     model, loras, prompt = _parse_comfy(nodes)
-    return {"engine": "comfyui", "model": model, "modelStrength": 1.0,
+    return {"engine": "comfyui", "model": model,
+            "modelStrength": 1.0 if model else None,
             "loras": loras, "prompt": prompt, "naiVersion": None}
 
 
@@ -578,7 +622,7 @@ def _extract_nai(text):
 
 def read_gen_meta(path):
     """从图片里读出 ComfyUI / NovelAI 的模型、Lora、正向提示词。"""
-    empty = {"engine": "", "model": "", "modelStrength": 1.0,
+    empty = {"engine": "", "model": "", "modelStrength": None,
              "loras": [], "prompt": "", "naiVersion": None,
              "modelOverridden": False, "lorasOverridden": False, "promptOverridden": False}
     text = _png_text(path)
@@ -1080,6 +1124,16 @@ class Handler(BaseHTTPRequestHandler):
                 c, src = read_comment(target)
             else:
                 src = "property"
+
+            if (not c and not anno.get("promptEdited")
+                    and (gen.get("prompt") or "").strip()):
+                # 属性里还没有备注，而图里有正向提示词：自动补写，
+                # 以后在资源管理器里也能直接看到
+                try:
+                    if write_native_comment(target, gen["prompt"]):
+                        c, src = gen["prompt"], "property"
+                except Exception:
+                    pass
 
             if c:
                 comment, prompt_done = c, True

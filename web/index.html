@@ -27,14 +27,6 @@
     </div>
   </div>
 
-  <div class="path-bar" id="pathBar" title="尚未选择文件夹">
-    <svg class="path-ico" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5h3.1c.5 0 1 .2 1.4.6L11.4 7H18a2.5 2.5 0 0 1 2.5 2.5v7A2.5 2.5 0 0 1 18 19H5.5A2.5 2.5 0 0 1 3 16.5v-9Z"
-            stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
-    </svg>
-    <span class="path-text" id="pathText">尚未选择文件夹</span>
-  </div>
-
   <div class="add-wrap" id="addWrap">
     <button class="add-btn" id="addBtn" type="button">
       <span class="plus">
@@ -50,9 +42,6 @@
     <div class="sel" id="sel"></div>
   </nav>
 
-  <div class="sidebar-foot">
-    <span class="live-dot"></span><span id="footStat">实时监听中</span>
-  </div>
 </aside>
 
 <!-- ============ 右侧舞台 ============ -->
@@ -140,7 +129,7 @@
           <label for="mNote">备注</label>
           <span class="note-state" id="mState"></span>
         </div>
-        <textarea id="mNote" placeholder="记录这张图的用途、拍摄想法…" spellcheck="false"></textarea>
+        <textarea id="mNote" placeholder="记录这张图的提示词…" spellcheck="false"></textarea>
         <div class="note-foot">
           <span id="mNoteSrc">图片属性 · 关闭弹窗自动保存</span>
         </div>

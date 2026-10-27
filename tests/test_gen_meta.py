@@ -105,12 +105,12 @@ def main():
         print("\n[ComfyUI]")
         g = server.read_gen_meta(comfy)
         check("engine", g["engine"], "comfyui")
-        check("模型", g["model"], "illustriousXL_v01.safetensors")
+        check("模型（不带后缀）", g["model"], "illustriousXL_v01")
         check("模型强度", g["modelStrength"], 1.0)
         check("Lora 数量", len(g["loras"]), 2)
-        check("Lora1 名（去掉目录）", g["loras"][0]["name"], "yumng_style.safetensors")
+        check("Lora1 名（去掉目录与后缀）", g["loras"][0]["name"], "yumng_style")
         check("Lora1 强度", g["loras"][0]["strength"], 0.85)
-        check("Lora2 名", g["loras"][1]["name"], "detail_tweaker.safetensors")
+        check("Lora2 名", g["loras"][1]["name"], "detail_tweaker")
         check("正向提示词来自 positive 而非 negative", g["prompt"],
               "masterpiece, best quality, 1girl, purple eyes")
 
@@ -142,7 +142,30 @@ def main():
         })})
         gs = server.read_gen_meta(sdxl)
         check("SDXL 取到 text_g", gs["prompt"], "anime style, night city")
-        check("SDXL 模型", gs["model"], "sdxl_base_1.0.safetensors")
+        check("SDXL 模型（不带后缀）", gs["model"], "sdxl_base_1.0")
+
+        print("\n[ComfyUI · AnimaMultiLoraLoader]")
+        anima = os.path.join(tmp, "anima.png")
+        make_png(anima, {"prompt": json.dumps({
+            "1": {"class_type": "CheckpointLoaderSimple",
+                  "inputs": {"ckpt_name": "flux1-dev.safetensors"}},
+            "2": {"class_type": "KSampler", "inputs": {"positive": ["3", 0]}},
+            "3": {"class_type": "CLIPTextEncode",
+                  "inputs": {"text": "1girl, anima style", "clip": ["1", 1]}},
+            "174": {"class_type": "AnimaMultiLoraLoader", "inputs": {
+                "selected_loras": json.dumps([
+                    {"name": "yumng_anima_3-000023.safetensors", "strength": 1, "enabled": True},
+                    {"name": "turned_off.safetensors", "strength": 0.8, "enabled": False},
+                ]),
+                "positive_prompt_dom": "", "negative_prompt_dom": "score_1, score_2"}},
+            "164": {"class_type": "AnimaMultiLoraLoader",
+                    "inputs": {"lora_list_json": "[]"}},
+        })})
+        ga = server.read_gen_meta(anima)
+        check("Anima 取到 1 个 Lora（enabled=false 被过滤）", len(ga["loras"]), 1)
+        check("Anima Lora 名（无后缀）", ga["loras"][0]["name"], "yumng_anima_3-000023")
+        check("Anima Lora 强度", ga["loras"][0]["strength"], 1.0)
+        check("Anima 正向提示词", ga["prompt"], "1girl, anima style")
 
         print("\n[NovelAI · Comment 不是 JSON]")
         nairaw = os.path.join(tmp, "nairaw.png")
@@ -158,6 +181,7 @@ def main():
         gp = server.read_gen_meta(plain)
         check("engine 为空", gp["engine"], "")
         check("无模型", gp["model"], "")
+        check("无模型时强度为空", gp["modelStrength"], None)
         check("无 Lora", gp["loras"], [])
 
         print("\n[覆盖存储]")

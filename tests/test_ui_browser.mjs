@@ -156,7 +156,7 @@ try {
   console.log('\n[1] 侧栏首屏');
   check('品牌名', await cdp.eval("document.querySelector('.brand-text h1').textContent"), 'Tag Pot');
   check('菜单根项数量', await cdp.eval("document.querySelectorAll('#menu > .group').length"), rootList.length);
-  const firstPath = await cdp.eval("document.getElementById('pathText').textContent");
+  const firstPath = await cdp.eval("document.getElementById('stageSub').textContent");
   check('路径自动同步为某个根目录', rootList.some((r) => r.path === firstPath), true);
 
   // ---------- 点开带子文件夹的根
@@ -171,7 +171,7 @@ try {
   }
   await clickItem(parent.name);
   await sleep(850);
-  check('路径同步为父级', await cdp.eval("document.getElementById('pathText').textContent"), parent.path);
+  check('路径同步为父级', await cdp.eval("document.getElementById('stageSub').textContent"), parent.path);
   check('子菜单已就地展开', await cdp.eval(
     `(()=>{const g=[...document.querySelectorAll('#menu > .group')].find(g=>g.dataset.path===${JSON.stringify(parent.path)}); return g.querySelector('.sub').offsetHeight;})()`
   ), (v) => v > 30);
@@ -243,7 +243,7 @@ try {
 
   await clickItem('zz_probe_folder');
   await sleep(800);
-  check('新出现的子项可被选中', await cdp.eval("document.getElementById('pathText').textContent"), probeDir);
+  check('新出现的子项可被选中', await cdp.eval("document.getElementById('stageSub').textContent"), probeDir);
 
   rmSync(probeDir, { recursive: true, force: true });
   let vanished = false;
@@ -253,12 +253,12 @@ try {
     if (vanished) break;
   }
   check('删除子文件夹 → 栏目里自动消失', vanished, true);
-  check('被删掉的选中项退回父级', await cdp.eval("document.getElementById('pathText').textContent"), parent.path);
+  check('被删掉的选中项退回父级', await cdp.eval("document.getElementById('stageSub').textContent"), parent.path);
 
   console.log('\n[3] 切换菜单项');
   await clickItem(other.name);
   await sleep(800);
-  check('路径切换为另一个根', await cdp.eval("document.getElementById('pathText').textContent"), other.path);
+  check('路径切换为另一个根', await cdp.eval("document.getElementById('stageSub').textContent"), other.path);
   check('父级子菜单已收起（手风琴）', await cdp.eval(
     `(()=>{const g=[...document.querySelectorAll('#menu > .group')].find(g=>g.dataset.path===${JSON.stringify(parent.path)}); return g.querySelector('.sub').offsetHeight;})()`
   ), 0);
@@ -282,7 +282,7 @@ try {
     const a=sel.getBoundingClientRect(), b=item.getBoundingClientRect();
     return Math.abs(a.top-b.top)<2 && Math.abs(a.height-b.height)<2 ? 'match' : 'mismatch';
   })()`), 'match');
-  check('快切后路径为最后点的根', await cdp.eval("document.getElementById('pathText').textContent"), other.path);
+  check('快切后路径为最后点的根', await cdp.eval("document.getElementById('stageSub').textContent"), other.path);
 
   console.log('\n[5] 点击子文件夹');
   await clickItem(parent.name);
@@ -296,7 +296,7 @@ try {
     return { match: Math.abs(a.top-b.top)<2 && Math.abs(a.width-b.width)<2, narrower: a.width < rootW - 4 };
   })()`);
   check('选中块跟随子项（更窄）', subSel.match && subSel.narrower, true);
-  check('路径同步为子文件夹', await cdp.eval("document.getElementById('pathText').textContent"), child.path);
+  check('路径同步为子文件夹', await cdp.eval("document.getElementById('stageSub').textContent"), child.path);
   check('子项图片数与后端一致', await cdp.eval("document.querySelectorAll('#masonry .tile').length"), (await apiImages(child.path)).images.length);
   check('选中子项后父级展开态保持', await cdp.eval(`(()=>{const g=[...document.querySelectorAll('#menu > .group')].find(x=>x.dataset.path===${JSON.stringify(parent.path)});
     return g.querySelector('.item').classList.contains('open') && g.querySelector('.sub').offsetHeight > 30;})()`), true);
@@ -347,7 +347,7 @@ try {
   console.log('\n[6b] 模型 / Lora');
   // 先清掉可能残留的自定义，保证这组用例可重复运行
   const tileName = await cdp.eval("(document.querySelector('#masonry .tile img') || {}).alt || ''");
-  const curFolder = await cdp.eval("document.getElementById('pathText').textContent");
+  const curFolder = await cdp.eval("document.getElementById('stageSub').textContent");
   const tileImg = (await apiImages(curFolder)).images.find((i) => i.name === tileName);
   const clearAnno = () => fetch(BASE + '/api/annotation', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -439,7 +439,7 @@ try {
   await sleep(1600);
   check('选择器已关闭', await cdp.eval("document.getElementById('pickMask').classList.contains('on')"), false);
   check('菜单新增一项', await cdp.eval("document.querySelectorAll('#menu > .group').length"), before + 1);
-  check('新项被选中', await cdp.eval("document.getElementById('pathText').textContent"), addedPath);
+  check('新项被选中', await cdp.eval("document.getElementById('stageSub').textContent"), addedPath);
   check('新项右侧有图片', await cdp.eval("document.querySelectorAll('#masonry .tile').length"), (v) => v > 0);
 
   console.log('\n[7b] 拖放交互');
