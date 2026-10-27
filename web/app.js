@@ -667,6 +667,7 @@ function makeLoraRow(item) {
   name.type = 'text';
   name.className = 'gen-input lora-name';
   name.spellcheck = false;
+  name.autocomplete = 'off';
   name.placeholder = 'Lora 名称';
   name.value = item.name || '';
 
@@ -674,6 +675,7 @@ function makeLoraRow(item) {
   str.type = 'number';
   str.step = '0.05';
   str.className = 'gen-input gen-str lora-str';
+  str.autocomplete = 'off';
   str.title = 'Lora 强度';
   const v = item.strength;
   str.value = (v === null || v === undefined || v === '') ? '' : v;
