@@ -23,7 +23,6 @@ if errorlevel 1 (
   --icon "%~dp0assets\tagpot.ico" ^
   --add-data "%~dp0web;web" ^
   --add-data "%~dp0assets;assets" ^
-  --add-data "%~dp0demo;demo" ^
   --hidden-import webview.platforms.edgechromium ^
   --hidden-import webview.platforms.winforms ^
   --collect-all clr_loader ^

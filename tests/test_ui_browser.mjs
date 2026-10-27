@@ -144,6 +144,15 @@ try {
     check(`${path} Content-Type 含 ${want}`, ct, (v) => v.includes(want));
   }
 
+  // 确保演示根目录已注册（新版默认不带任何预置文件夹）
+  const projRoot = decodeURIComponent(new URL('../', import.meta.url).pathname).replace(/^\/(\w):/, '$1:');
+  for (const name of ['Studio', 'Archive']) {
+    await fetch(BASE + '/api/roots', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: join(projRoot, 'demo', name) }),
+    });
+  }
+
   await cdp.send('Page.navigate', { url: BASE + '/' });
   let ready = false;
   for (let i = 0; i < 240; i++) {

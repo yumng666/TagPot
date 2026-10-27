@@ -39,7 +39,6 @@ if os.path.isdir(_vendor):
 
 WEB_DIR = os.path.join(RES_DIR, "web")
 ASSETS_DIR = os.path.join(RES_DIR, "assets")
-DEMO_DIR = os.path.join(RES_DIR, "demo")
 
 
 def _writable(d):

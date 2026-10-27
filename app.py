@@ -83,6 +83,51 @@ def _install_webview2_hooks():
     return True
 
 
+def _install_webview2_hooks():
+    """打开 WebView2 的外部拖放，并把拖入项的真实绝对路径交给后端暂存。
+
+    HTML5 拖放拿不到绝对路径，只有 WebView2 的 AdditionalObjects 能给出
+    CoreWebView2File.Path；这里截获页面发来的 TagPotDrop 消息。
+    """
+    try:
+        from webview.platforms import edgechromium as ec
+    except Exception:
+        return False
+
+    original_notify = ec.EdgeChrome.on_script_notify
+
+    def on_script_notify(self, sender, args):
+        try:
+            if args.get_WebMessageAsJson() == '"%s"' % DROP_MSG:
+                objs = args.get_AdditionalObjects()
+                for f in list(objs or []):
+                    path = getattr(f, "Path", None)
+                    if path:
+                        server.push_drop(path)
+                return
+        except Exception:
+            pass
+        return original_notify(self, sender, args)
+
+    ec.EdgeChrome.on_script_notify = on_script_notify
+
+    original_init = ec.EdgeChrome.__init__
+
+    def __init__(self, *a, **kw):
+        original_init(self, *a, **kw)
+        ok = False
+        try:
+            self.webview.AllowExternalDrop = True
+            ok = bool(self.webview.AllowExternalDrop)
+        except Exception as exc:
+            ok = "ERR %r" % (exc,)
+        if os.environ.get("TAGPOT_LOG"):
+            server._log("[dnd] AllowExternalDrop=%s" % ok)
+
+    ec.EdgeChrome.__init__ = __init__
+    return True
+
+
 def _seed_demo():
     """首次运行时把随包演示素材复制到 data/demo，并写好配置。
 
@@ -240,7 +285,6 @@ def main():
         return 1
 
     _app_id()
-    _seed_demo()
     _install_webview2_hooks()
 
     httpd, port = server.build_httpd(8765)
