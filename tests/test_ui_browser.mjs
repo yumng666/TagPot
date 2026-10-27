@@ -86,6 +86,14 @@ class CDP {
 }
 
 /* ---------------------------------------------------------------- 先摸清后端结构 */
+// 新版默认不带预置文件夹：先把仓库里的演示目录注册进去（已存在会被跳过）
+const projRoot = decodeURIComponent(new URL('../', import.meta.url).pathname).replace(/^\/(\w):/, '$1:');
+for (const name of ['Studio', 'Archive']) {
+  await fetch(BASE + '/api/roots', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: join(projRoot, 'demo', name) }),
+  });
+}
 const rootList = (await apiState()).roots;
 if (!rootList.length) {
   console.log('后端没有任何根目录，无法测试');
@@ -142,15 +150,6 @@ try {
     const r = await fetch(BASE + path);
     const ct = (r.headers.get('content-type') || '').split(';')[0];
     check(`${path} Content-Type 含 ${want}`, ct, (v) => v.includes(want));
-  }
-
-  // 确保演示根目录已注册（新版默认不带任何预置文件夹）
-  const projRoot = decodeURIComponent(new URL('../', import.meta.url).pathname).replace(/^\/(\w):/, '$1:');
-  for (const name of ['Studio', 'Archive']) {
-    await fetch(BASE + '/api/roots', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: join(projRoot, 'demo', name) }),
-    });
   }
 
   await cdp.send('Page.navigate', { url: BASE + '/' });
