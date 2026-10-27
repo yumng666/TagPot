@@ -831,6 +831,103 @@ def _extract_workflow(text):
             "loras": loras, "prompt": pos, "naiVersion": None, "negative": neg}
 
 
+# --------------------------------------------------------------------------- 批量写入备注
+IMG_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
+_aw_lock = threading.Lock()
+_aw_queue = []            # 待处理的目录
+_aw_queued = set()        # 已排队的目录（去重）
+_aw_state = {"active": False, "done": 0, "total": 0, "written": 0,
+             "skipped": 0, "nodata": 0, "failed": 0, "current": ""}
+_aw_done = set()          # 本次运行已处理过的文件（重复触发时秒过）
+
+
+def _autowrite_one(path):
+    """对单张图：属性里已有备注 → skip；能检测到提示词且属性为空 → 写入。"""
+    try:
+        c = read_native_comment(path)
+        if c:
+            return "skip"
+        g = read_gen_meta(path)
+        prompt = (g.get("prompt") or "").strip()
+        if not prompt:
+            return "nodata"
+        if write_native_comment(path, prompt):
+            return "written"
+        return "failed"
+    except Exception:
+        return "failed"
+
+
+def _autowrite_tree(root):
+    """递归处理一个目录树，结束后把汇总写进 genmeta.log。"""
+    st = _aw_state
+    files = []
+    for r, _dirs, fs in os.walk(root):
+        for f in fs:
+            if os.path.splitext(f)[1].lower() in IMG_EXTS:
+                files.append(os.path.join(r, f))
+    files.sort()
+    st["total"] += len(files)
+    counts = {"written": 0, "skipped": 0, "nodata": 0, "failed": 0}
+    for i, fp in enumerate(files):
+        st["current"] = fp
+        if fp in _aw_done:
+            counts["skipped"] += 1
+            st["done"] += 1
+            continue
+        _aw_done.add(fp)
+        r = _autowrite_one(fp)
+        counts[r] = counts.get(r, 0) + 1
+        st["done"] += 1
+        for k in counts:
+            st[k] = st.get(k, 0) + (1 if k == r else 0)
+    try:
+        entry = json.dumps({"time": time.strftime("%m-%d %H:%M:%S"),
+                            "root": root, "total": len(files),
+                            "written": counts["written"], "skipped": counts["skipped"],
+                            "nodata": counts["nodata"], "failed": counts["failed"]},
+                           ensure_ascii=False)
+        logp = os.path.join(DATA_DIR, "genmeta.log")
+        lines = []
+        if os.path.exists(logp):
+            with open(logp, encoding="utf-8") as f:
+                lines = f.read().splitlines()[-199:]
+        lines.append(entry)
+        with open(logp, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+    except Exception:
+        pass
+
+
+def _autowrite_worker():
+    st = _aw_state
+    st["active"] = True
+    while True:
+        with _aw_lock:
+            if not _aw_queue:
+                break
+            root = _aw_queue.pop(0)
+        try:
+            _autowrite_tree(root)
+        except Exception:
+            pass
+    st["active"] = False
+    st["current"] = ""
+
+
+def _queue_autowrite(path):
+    path = os.path.abspath(path)
+    if not os.path.isdir(path):
+        return
+    with _aw_lock:
+        if path in _aw_queued:
+            return
+        _aw_queued.add(path)
+        _aw_queue.append(path)
+    t = threading.Thread(target=_autowrite_worker, daemon=True)
+    t.start()
+
+
 def _log_genmeta(path, text, note):
     """识别失败时记一条诊断日志（data/genmeta.log，只保留最近 200 条）。"""
     try:
@@ -1047,12 +1144,20 @@ def read_native_comment(path):
             pass
 
 
-def write_native_comment(path, text):
-    """把备注写回 Windows 属性。成功返回 True。"""
+def write_native_comment(path, text, tries=3):
+    """把备注写回 Windows 属性。成功返回 True。
+
+    属性存储偶尔会被杀软/索引器短暂占用，重试几次基本都能过。
+    """
     pk = _pk_comment()
     if pk is None:
         return False
-    store = _open_propstore(path, True)
+    store = None
+    for attempt in range(tries):
+        store = _open_propstore(path, True)
+        if store is not None:
+            break
+        time.sleep(0.12)
     if store is None:
         return False
     try:
@@ -1463,10 +1568,22 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(200, {"roots": [root_payload(r) for r in STATE["roots"]], "added": None})
                 STATE["roots"].append({"id": _rid(ap), "path": ap})
                 save_state()
+            _queue_autowrite(ap)          # 新加的文件夹：后台批量写入备注
             return self._send(200, {
                 "roots": [root_payload(r) for r in STATE["roots"]],
                 "added": _rid(ap),
             })
+
+        if p == "/api/autowrite":
+            data = self._body()
+            target = resolve_allowed((data.get("path") or "").strip())
+            if not target or not os.path.isdir(target):
+                return self._err(404, "目录不可访问")
+            _queue_autowrite(target)
+            return self._send(200, {"ok": True, "status": _aw_state})
+
+        if p == "/api/autowrite/status":
+            return self._send(200, dict(_aw_state))
 
         if p == "/api/roots/remove":
             data = self._body()

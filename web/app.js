@@ -527,6 +527,10 @@ async function loadFolder(node) {
     $('#stageName').textContent = d.name;
     $('#stageSub').textContent = d.path;
     syncImages(d.images || [], true);
+    api('/api/autowrite', {
+      method: 'POST',
+      body: JSON.stringify({ path: d.path })
+    }).catch(() => { });   // 后台批量写入备注；失败不影响浏览
     if (!(d.images || []).length && token === S.loadToken) {
       // 这个文件夹本身没有图片：看看图片是不是都在子文件夹里
       try {
@@ -609,11 +613,9 @@ function syncImages(images, reset) {
   next.forEach(it => {
     const rec = S.tiles.get(it.path);
     if (rec) {
-      if (rec.item.mtime !== it.mtime || rec.item.size !== it.size) {
-        rec.item = it;
-        rec.img.classList.remove('ready');
-        rec.img.src = thumbUrl(it);
-      }
+      // mtime/size 变化通常只是元数据被更新（如后台写入备注），
+      // 像素没变，不重载缩略图；像素真的变了用右上角「刷新」
+      rec.item = it;
     } else {
       createTile(it);
     }
