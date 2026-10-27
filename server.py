@@ -482,6 +482,28 @@ def _anno_set(path, patch):
     return item
 
 
+def _png_chunk_types(path):
+    """直接按 PNG 结构扫块类型，绕开 Pillow —— 用于诊断元数据是否存在。"""
+    types = []
+    try:
+        with open(path, "rb") as f:
+            if f.read(8)[:4] != b"\x89PNG":
+                return types
+            while True:
+                head = f.read(8)
+                if len(head) < 8:
+                    break
+                length = int.from_bytes(head[:4], "big")
+                ctype = head[4:8].decode("latin1", "ignore")
+                types.append(ctype)
+                f.seek(length + 4, 1)          # 跳过数据与 CRC
+                if ctype == "IEND" or len(types) > 512:
+                    break
+    except Exception:
+        pass
+    return types
+
+
 def _png_text(path):
     """取 PNG 的 tEXt/iTXt 文本块；非 PNG 返回 {}。"""
     if Image is None:
@@ -674,19 +696,29 @@ def _extract_nai(text):
     }
 
 
-def read_gen_meta(path):
+def read_gen_meta(path, debug=False):
     """从图片里读出 ComfyUI / NovelAI 的模型、Lora、正向提示词。"""
     empty = {"engine": "", "model": "", "modelStrength": None,
              "loras": [], "prompt": "", "naiVersion": None,
              "modelOverridden": False, "lorasOverridden": False, "promptOverridden": False}
     text = _png_text(path)
+    if debug:
+        empty["debug"] = {"chunkKeys": sorted(text.keys()),
+                          "pngChunks": _png_chunk_types(path)}
     if not text:
         return empty
     try:
         found = _extract_comfy(text) or _extract_nai(text)
-    except Exception:
+    except Exception as exc:
         found = None
+        if debug:
+            empty["debug"]["parseError"] = repr(exc)
     if not found:
+        if debug:
+            empty["debug"]["note"] = "没有可识别的生成元数据"
+            raw = text.get("prompt")
+            if raw:
+                empty["debug"]["promptChunkHead"] = raw[:200]
         return empty
     empty.update(found)
     return empty
@@ -1170,7 +1202,7 @@ class Handler(BaseHTTPRequestHandler):
             m = image_meta(target)
             if not m:
                 return self._err(404, "无法读取")
-            gen = read_gen_meta(target)
+            gen = read_gen_meta(target, debug=("debug" in qs))
             anno = _anno_get(target)
 
             c = read_native_comment(target)
