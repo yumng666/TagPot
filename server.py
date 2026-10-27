@@ -447,7 +447,10 @@ def _parse_lora_list(val):
         name = _pretty_name(it.get("name") or "")
         if not name:
             continue
-        out.append({"name": name, "strength": _num(it.get("strength"), 1.0)})
+        strength = _num(it.get("strength"), 1.0)
+        if strength == 0:
+            continue          # 强度为 0 等于没挂，不显示
+        out.append({"name": name, "strength": strength})
     return out
 
 
@@ -665,9 +668,9 @@ def _parse_comfy(nodes):
             model = _pretty_name(inputs.get("unet_name"))
         if ct in ("LoraLoader", "LoraLoaderModelOnly"):
             name = _pretty_name(inputs.get("lora_name"))
-            if name:
-                loras.append({"name": name,
-                              "strength": _num(inputs.get("strength_model"), 1.0)})
+            strength = _num(inputs.get("strength_model"), 1.0)
+            if name and strength != 0:
+                loras.append({"name": name, "strength": strength})
         # 其它加载器：凡输入里带 lora 字样的 JSON 列表都认（AnimaMultiLoraLoader 等）
         for key, val in inputs.items():
             if "lora" not in key.lower():
@@ -814,8 +817,9 @@ def _extract_workflow(text):
                     loras.extend(_parse_lora_list(w))
             if wv and isinstance(wv[0], str) and not wv[0].strip().startswith("["):
                 nm = _pretty_name(wv[0])
-                if nm:
-                    loras.append({"name": nm, "strength": _num(wv[1] if len(wv) > 1 else None, 1.0)})
+                st = _num(wv[1] if len(wv) > 1 else None, 1.0)
+                if nm and st != 0:
+                    loras.append({"name": nm, "strength": st})
         if "sampler" in t:
             for inp in (n.get("inputs") or []):
                 nm = inp.get("name")

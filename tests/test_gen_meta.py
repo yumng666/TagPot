@@ -230,6 +230,24 @@ def main():
         check("日志含路径", os.path.basename(line["path"]), "nolog.png")
         check("日志含块类型", "tEXt" in line["chunks"], True)
 
+        print("\n[ComfyUI · 强度为 0 的 Lora 不显示]")
+        zl = os.path.join(tmp, "zero-lora.png")
+        make_png(zl, {"prompt": json.dumps({
+            "1": {"class_type": "CheckpointLoaderSimple",
+                  "inputs": {"ckpt_name": "m.safetensors"}},
+            "2": {"class_type": "KSampler", "inputs": {"positive": ["3", 0]}},
+            "3": {"class_type": "CLIPTextEncode", "inputs": {"text": "1girl", "clip": ["1", 1]}},
+            "4": {"class_type": "LoraLoader",
+                  "inputs": {"lora_name": "off_lora.safetensors", "strength_model": 0,
+                             "strength_clip": 0, "model": ["1", 0]}},
+            "5": {"class_type": "LoraLoader",
+                  "inputs": {"lora_name": "on_lora.safetensors", "strength_model": 0.8,
+                             "strength_clip": 0.8, "model": ["4", 0]}},
+        })})
+        gz = server.read_gen_meta(zl)
+        check("强度 0 的 Lora 被过滤", [x["name"] for x in gz["loras"]], ["on_lora"])
+        check("保留的强度正确", gz["loras"][0]["strength"], 0.8)
+
         print("\n[普通图片]")
         gp = server.read_gen_meta(plain)
         check("engine 为空", gp["engine"], "")
