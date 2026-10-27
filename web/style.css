@@ -324,10 +324,6 @@ body {
 
 .depth-2 .item { margin-left: 28px; font-size: 12px; }
 
-  70%  { box-shadow: 0 0 0 7px rgba(53, 192, 122, 0); }
-  100% { box-shadow: 0 0 0 0 rgba(53, 192, 122, 0); }
-}
-
 /* ============================================================ 舞台 */
 .stage {
   flex: 1;
