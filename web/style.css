@@ -872,6 +872,93 @@ body {
 .toast.on { opacity: 1; transform: translate(-50%, 0); }
 .toast.bad { background: rgba(160, 32, 48, .94); }
 
+/* ============================================================ 确认弹窗 */
+.confirm-mask { z-index: 260; padding: 24px; }
+
+.confirm-card {
+  width: min(380px, 100%);
+  background: #fff;
+  border-radius: 18px;
+  padding: 22px 22px 20px;
+  box-shadow: 0 44px 96px -32px rgba(6, 20, 55, .55),
+              0 0 0 1px rgba(255, 255, 255, .55);
+  transform: translateY(12px) scale(.965);
+  opacity: 0;
+  transition: transform .34s var(--ease), opacity .26s ease;
+}
+
+.confirm-mask.on .confirm-card { transform: none; opacity: 1; }
+
+.confirm-ico {
+  width: 42px;
+  height: 42px;
+  border-radius: 13px;
+  display: grid;
+  place-items: center;
+  background: var(--blue-50);
+  color: var(--blue-600);
+  margin-bottom: 13px;
+}
+
+.confirm-ico svg { width: 20px; height: 20px; }
+
+.confirm-card.danger .confirm-ico { background: #fdecec; color: #e5484d; }
+
+.confirm-card h3 {
+  margin: 0 0 7px;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -.2px;
+  word-break: break-all;
+}
+
+.confirm-card p {
+  margin: 0 0 18px;
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-3);
+}
+
+.confirm-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.cf-cancel {
+  height: 34px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .18s, color .18s;
+}
+
+.cf-cancel:hover { background: var(--blue-50); color: var(--ink); }
+
+.cf-ok {
+  height: 34px;
+  padding: 0 18px;
+  border-radius: 10px;
+  border: 0;
+  background: linear-gradient(135deg, #2f6bff 0%, #4b83ff 100%);
+  color: #fff;
+  font-size: 12.5px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  box-shadow: 0 10px 20px -12px rgba(29, 91, 255, .95);
+  transition: filter .18s;
+}
+
+.cf-ok:hover { filter: brightness(1.06); }
+
+.confirm-card.danger .cf-ok {
+  background: linear-gradient(135deg, #ef4444 0%, #f87171 100%);
+  box-shadow: 0 10px 20px -12px rgba(239, 68, 68, .9);
+}
+
 /* ============================================================ 添加文件夹 */
 .pk-mask { padding: 28px; }
 

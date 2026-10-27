@@ -181,6 +181,24 @@
   </div>
 </div>
 
+<!-- ============ 确认弹窗 ============ -->
+<div class="mask confirm-mask" id="confirmMask">
+  <div class="confirm-card" id="confirmCard" role="alertdialog" aria-modal="true">
+    <div class="confirm-ico">
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4 7h16M9.5 7V5.4A1.4 1.4 0 0 1 10.9 4h2.2A1.4 1.4 0 0 1 14.5 5.4V7M6.5 7l.8 11a2 2 0 0 0 2 1.9h5.4a2 2 0 0 0 2-1.9l.8-11"
+              stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+    <h3 id="cfTitle">确认</h3>
+    <p id="cfMsg"></p>
+    <div class="confirm-actions">
+      <button class="cf-cancel" id="cfCancel" type="button">取消</button>
+      <button class="cf-ok" id="cfOk" type="button">确定</button>
+    </div>
+  </div>
+</div>
+
 <script src="/static/app.js"></script>
 </body>
 </html>

@@ -162,7 +162,13 @@ function buildNodeEl(node) {
   if (rm) {
     rm.addEventListener('click', async e => {
       e.stopPropagation();
-      if (!confirm(`从 Tag Pot 移除「${node.name}」？\n（不会删除磁盘上的文件）`)) return;
+      const okGo = await askConfirm({
+        title: `从 Tag Pot 移除「${node.name}」？`,
+        message: '只从左侧列表移除，不会删除磁盘上的文件。',
+        okText: '移除',
+        danger: true
+      });
+      if (!okGo) return;
       try {
         const r = await api('/api/roots/remove', {
           method: 'POST',
@@ -256,6 +262,31 @@ function selectNode(node) {
   node.itemEl.scrollIntoView({ block: 'nearest' });
   loadFolder(node);
   api('/api/active', { method: 'POST', body: JSON.stringify({ id: node.id }) }).catch(() => {});
+}
+
+/* ------------------------------------------------------------ 确认弹窗 */
+let confirmResolve = null;
+
+function askConfirm(opts) {
+  return new Promise((resolve) => {
+    confirmResolve = resolve;
+    $('#cfTitle').textContent = opts.title || '确认';
+    const msg = $('#cfMsg');
+    msg.textContent = opts.message || '';
+    msg.style.display = opts.message ? '' : 'none';
+    $('#cfOk').textContent = opts.okText || '确定';
+    $('#confirmCard').classList.toggle('danger', !!opts.danger);
+    $('#confirmMask').classList.add('on');
+    setTimeout(() => { try { $('#cfCancel').focus(); } catch (e) { } }, 130);
+  });
+}
+
+function settleConfirm(ok) {
+  if (!confirmResolve) return;
+  const done = confirmResolve;
+  confirmResolve = null;
+  $('#confirmMask').classList.remove('on');
+  done(ok);
 }
 
 function onItemClick(node) {
@@ -1161,6 +1192,12 @@ function initDropTarget() {
 
 /* ------------------------------------------------------------ 绑定 */
 function bindUI() {
+  $('#cfOk').addEventListener('click', () => settleConfirm(true));
+  $('#cfCancel').addEventListener('click', () => settleConfirm(false));
+  $('#confirmMask').addEventListener('click', (e) => {
+    if (e.target === $('#confirmMask')) settleConfirm(false);
+  });
+
   $('#addBtn').addEventListener('click', () => openPicker());
   initDropTarget();
 
@@ -1209,6 +1246,11 @@ function bindUI() {
   $('#mImg').addEventListener('click', e => e.stopPropagation());
 
   document.addEventListener('keydown', e => {
+    if (confirmResolve) {
+      if (e.key === 'Escape') { e.preventDefault(); settleConfirm(false); }
+      if (e.key === 'Enter') { e.preventDefault(); settleConfirm(true); }
+      return;
+    }
     if (e.key === 'Escape') {
       if (PK.open) { closePicker(); return; }
       if (S.modalOpen) closeModal();
