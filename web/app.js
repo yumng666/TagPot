@@ -354,6 +354,13 @@ function purgeNode(node) {
  * 子文件夹有增删时就地更新子菜单：只动变化的那几行，不重建整棵树，
  * 容器高度跟着过渡，后面的栏目位置同步平移。
  */
+function sortDirsNewest(dirs) {
+  /* 子文件夹按修改时间排序，最新改动的在最上面；同时间的按名字排。 */
+  return (dirs || []).slice().sort((a, b) =>
+    (b.mtime || 0) - (a.mtime || 0) ||
+    String(a.name).localeCompare(String(b.name), 'zh'));
+}
+
 function reconcileChildren(node, dirs) {
   const oldPaths = (node.dirs || []).map(d => d.path);
   const newPaths = dirs.map(d => d.path);
@@ -384,6 +391,15 @@ function reconcileChildren(node, dirs) {
     el.classList.add('just-added');
     el.addEventListener('animationend', () => el.classList.remove('just-added'), { once: true });
     node.innerEl.insertBefore(el, node.innerEl.children[idx] || null);
+  });
+
+  // 顺序可能变了（按修改时间排序后会换位）：把已有子项挪到新位置
+  dirs.forEach((d, idx) => {
+    const child = S.nodes.get('c:' + d.path);
+    if (!child || !child.el) return;
+    if (node.innerEl.children[idx] !== child.el) {
+      node.innerEl.insertBefore(child.el, node.innerEl.children[idx] || null);
+    }
   });
 
   node.dirs = dirs;
@@ -431,6 +447,7 @@ async function expand(node) {
   node.loading = false;
   node.loaded = true;
 
+  dirs = sortDirsNewest(dirs);
   if (!node.rendered) {
     node.dirs = dirs;
     renderChildren(node);
@@ -509,6 +526,7 @@ async function syncTree(hintPath, dirsHint) {
           continue;
         }
       }
+      dirs = sortDirsNewest(dirs);
       if (!node.open) continue;
       reconcileChildren(node, dirs);
     }

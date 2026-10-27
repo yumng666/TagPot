@@ -253,7 +253,8 @@ def _scan_dirs(path: str, with_children_hint=True):
                                     break
                     except Exception:
                         has = False
-                out.append({"name": e.name, "path": e.path, "hasDirs": has})
+                out.append({"name": e.name, "path": e.path, "hasDirs": has,
+                            "mtime": e.stat(follow_symlinks=False).st_mtime_ns})
             except Exception:
                 continue
     out.sort(key=lambda x: x["name"].lower())
