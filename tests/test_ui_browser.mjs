@@ -88,6 +88,7 @@ class CDP {
 /* ---------------------------------------------------------------- 先摸清后端结构 */
 // 新版默认不带预置文件夹：先把仓库里的演示目录注册进去（已存在会被跳过）
 const projRoot = decodeURIComponent(new URL('../', import.meta.url).pathname).replace(/^\/(\w):/, '$1:');
+const preRoots = new Set(((await apiState()).roots || []).map((r) => r.path.toLowerCase()));
 for (const name of ['Studio', 'Archive']) {
   await fetch(BASE + '/api/roots', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -485,6 +486,19 @@ try {
 
   console.log('\n[8] 控制台报错');
   check('无未捕获异常', cdp.errors.length, 0);
+
+  // 收尾：移除本次注册的演示根目录（用户自己的根目录不受影响）
+  try {
+    for (const r of (await apiState()).roots || []) {
+      const mine = /tag-pot[\\/]demo/i.test(r.path);
+      if (mine && !preRoots.has(r.path.toLowerCase())) {
+        await fetch(BASE + '/api/roots/remove', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: r.id }),
+        });
+      }
+    }
+  } catch (e) { }
 
   console.log('\n截图：' + shots.join('\n      '));
   console.log(fails.length ? `\n❌ 失败 ${fails.length} 项：${fails.join(' / ')}` : '\n✅ 全部通过');

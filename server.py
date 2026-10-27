@@ -1372,6 +1372,7 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     if write_native_comment(target, gen["prompt"]):
                         c, src = gen["prompt"], "property"
+                        _log_genmeta(target, {}, "修复：属性里的负向已改写为正向")
                 except Exception:
                     pass
 
@@ -1382,8 +1383,11 @@ class Handler(BaseHTTPRequestHandler):
                 try:
                     if write_native_comment(target, gen["prompt"]):
                         c, src = gen["prompt"], "property"
-                except Exception:
-                    pass
+                        _log_genmeta(target, {}, "自动写入成功")
+                    else:
+                        _log_genmeta(target, {}, "自动写入失败（属性系统拒绝写入）")
+                except Exception as exc:
+                    _log_genmeta(target, {}, "自动写入异常 " + repr(exc))
 
             if c:
                 comment, prompt_done = c, True
