@@ -475,8 +475,13 @@ def _anno_set(path, patch):
     for key, val in patch.items():
         if val is None:      # None 表示撤销该项自定义
             item.pop(key, None)
-        else:
-            item[key] = val
+            continue
+        if key == "model" and isinstance(val, dict):
+            val = str(val.get("name") or "").strip()   # 旧格式统一成纯名字
+            if not val:
+                item.pop(key, None)
+                continue
+        item[key] = val
     if item:
         data[path] = item
     else:
@@ -695,7 +700,6 @@ def _extract_comfy(text):
         return None
     model, loras, prompt, negative = _parse_comfy(nodes)
     return {"engine": "comfyui", "model": model,
-            "modelStrength": 1.0 if model else None,
             "loras": loras, "prompt": prompt, "naiVersion": None,
             "negative": negative}
 
@@ -736,7 +740,7 @@ def _extract_nai(text):
         return {
             "engine": "novelai",
             "model": ("Nai " + ver).strip() if ver else "Nai",
-            "modelStrength": None,
+
             "loras": [],
             "prompt": raw.strip(),
             "naiVersion": ver or None,
@@ -755,7 +759,6 @@ def _extract_nai(text):
     return {
         "engine": "novelai",
         "model": ("Nai " + ver).strip() if ver else "Nai",
-        "modelStrength": None,
         "loras": [],
         "prompt": prompt,
         "naiVersion": ver or None,
@@ -833,7 +836,6 @@ def _extract_workflow(text):
     if not (pos or model or loras):
         return None
     return {"engine": "comfyui", "model": model,
-            "modelStrength": 1.0 if model else None,
             "loras": loras, "prompt": pos, "naiVersion": None, "negative": neg}
 
 
@@ -857,7 +859,7 @@ def _log_genmeta(path, text, note):
 
 def read_gen_meta(path, debug=False):
     """从图片里读出 ComfyUI / NovelAI 的模型、Lora、正向提示词。"""
-    empty = {"engine": "", "model": "", "modelStrength": None,
+    empty = {"engine": "", "model": "",
              "loras": [], "prompt": "", "naiVersion": None,
              "modelOverridden": False, "lorasOverridden": False, "promptOverridden": False}
     text = _png_text(path)
@@ -1402,19 +1404,18 @@ class Handler(BaseHTTPRequestHandler):
                 if comment:
                     src = "generated"
 
-            if isinstance(anno.get("model"), dict):
-                gen["model"] = anno["model"].get("name", gen.get("model", ""))
-                if "strength" in anno["model"]:
-                    gen["modelStrength"] = anno["model"]["strength"]
+            m_ov = anno.get("model")
+            if isinstance(m_ov, dict):          # 旧格式 {name, strength}
+                gen["model"] = m_ov.get("name") or gen.get("model", "")
+                gen["modelOverridden"] = bool(m_ov.get("name"))
+            elif isinstance(m_ov, str) and m_ov.strip():
+                gen["model"] = m_ov.strip()
                 gen["modelOverridden"] = True
             if isinstance(anno.get("loras"), list):
                 gen["loras"] = anno["loras"]
                 gen["lorasOverridden"] = True
             gen["promptOverridden"] = prompt_done
             gen.pop("negative", None)   # 内部字段，不下发
-            if gen.get("engine") == "novelai" and not gen.get("lorasOverridden"):
-                gen["modelStrength"] = None
-
             m = dict(m)
             m["comment"] = comment
             m["commentSource"] = src
@@ -1518,11 +1519,12 @@ class Handler(BaseHTTPRequestHandler):
                 patch["model"] = None
             if "loras" in data and data.get("loras") is None:
                 patch["loras"] = None
-            if isinstance(data.get("model"), dict):
-                patch["model"] = {
-                    "name": str(data["model"].get("name") or "").strip(),
-                    "strength": _num(data["model"].get("strength"), 1.0),
-                }
+            if isinstance(data.get("model"), str):
+                patch["model"] = data["model"].strip()          # 新格式：纯名字
+            elif isinstance(data.get("model"), dict):            # 旧客户端兼容
+                nm = str(data["model"].get("name") or "").strip()
+                if nm:
+                    patch["model"] = nm
             if isinstance(data.get("loras"), list):
                 rows = []
                 for it in data["loras"]:

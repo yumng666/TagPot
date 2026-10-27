@@ -793,27 +793,17 @@ function collectLoras() {
   return out;
 }
 
-function readModelStrength() {
-  const raw = $('#mModelStr').value.trim();
-  if (raw === '') return 1;
-  const n = Number(raw);
-  return isFinite(n) ? n : 1;
-}
-
 function fillGen(gen) {
   const g = gen || {};
   $('#genBlock').classList.toggle('nai', g.engine === 'novelai');
   $('#mModel').value = g.model || '';
-  const ms = g.modelStrength;
-  $('#mModelStr').value = (ms === null || ms === undefined) ? '' : ms;
   renderLoras(g.loras || []);
-  S.genSnap = { model: $('#mModel').value, strength: readModelStrength(), loras: collectLoras() };
+  S.genSnap = { model: $('#mModel').value, loras: collectLoras() };
 }
 
 function resetGen() {
   $('#genBlock').classList.remove('nai');
   $('#mModel').value = '';
-  $('#mModelStr').value = '';
   $('#loraList').textContent = '';
   S.genSnap = null;
 }
@@ -821,14 +811,13 @@ function resetGen() {
 async function saveGen(path) {
   if (!S.genSnap) return;
   const model = $('#mModel').value.trim();
-  const strength = readModelStrength();
   const loras = collectLoras();
   const snap = S.genSnap;
   const patch = { path };
   let dirty = false;
-  if (model !== snap.model || strength !== snap.strength) {
+  if (model !== snap.model) {
     // 名字留空 = 没有自定义，撤销覆盖（有检测值就回到检测值）
-    patch.model = model ? { name: model, strength } : null;
+    patch.model = model || null;
     dirty = true;
   }
   if (JSON.stringify(loras) !== JSON.stringify(snap.loras)) {
@@ -839,7 +828,7 @@ async function saveGen(path) {
   const token = S.metaToken;
   try {
     await api('/api/annotation', { method: 'POST', body: JSON.stringify(patch) });
-    if (token === S.metaToken) S.genSnap = { model, strength, loras };
+    if (token === S.metaToken) S.genSnap = { model, loras };
   } catch (e) {
     toast('模型 / Lora 保存失败：' + e.message, 'bad');
   }
