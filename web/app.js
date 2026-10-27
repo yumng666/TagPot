@@ -762,7 +762,8 @@ async function saveGen(path) {
   const patch = { path };
   let dirty = false;
   if (model !== snap.model || strength !== snap.strength) {
-    patch.model = { name: model, strength };
+    // 名字留空 = 没有自定义，撤销覆盖（有检测值就回到检测值）
+    patch.model = model ? { name: model, strength } : null;
     dirty = true;
   }
   if (JSON.stringify(loras) !== JSON.stringify(snap.loras)) {
@@ -814,7 +815,7 @@ async function showModal(i) {
     const m = await api('/api/meta?path=' + enc(it.path));
     if (token !== S.metaToken) return;
     note.value = m.comment || '';
-    note.placeholder = '记录这张图的用途、拍摄想法…';
+    note.placeholder = '记录这张图的提示词…';
     S.noteOriginal = m.comment || '';
     $('#mDate').textContent = fmtDate(m.ctime);
     if (m.w && m.h) $('#mRes').textContent = `${m.w} × ${m.h}`;
