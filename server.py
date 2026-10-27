@@ -1129,11 +1129,19 @@ def _open_propstore_hr(path, writable):
     return store, hr
 
 
+_prop_lock = threading.Lock()   # 属性存储不支持多线程并发写：串行化，否则 SetValue/Commit 随机报错
+
+
 def read_native_comment(path):
     """读 Windows 属性里的备注。取不到返回 None（而不是空串），便于上层回退。"""
     pk = _pk_comment()
     if pk is None:
         return None
+    with _prop_lock:
+        return _read_native_comment_locked(path, pk)
+
+
+def _read_native_comment_locked(path, pk):
     store = _open_propstore(path, False)
     if store is None:
         return None
@@ -1166,6 +1174,11 @@ def write_native_comment(path, text, tries=3):
     pk = _pk_comment()
     if pk is None:
         return False
+    with _prop_lock:
+        return _write_native_comment_locked(path, text, pk, tries)
+
+
+def _write_native_comment_locked(path, text, pk, tries):
     store = None
     last = "open"
     for attempt in range(tries):
