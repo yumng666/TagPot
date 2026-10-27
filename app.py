@@ -288,6 +288,8 @@ def main():
     _install_webview2_hooks()
 
     httpd, port = server.build_httpd(8765)
+    for r in server.STATE["roots"]:
+        server._queue_autowrite(r["path"])   # 启动即后台批量写入备注（已有备注的会跳过）
     if httpd is None:
         _msgbox("没有可用端口（8765 起 12 个都被占用）。")
         return 1

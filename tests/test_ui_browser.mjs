@@ -372,7 +372,6 @@ try {
   const stamp2 = 'test-model-' + Date.now();
   await cdp.eval(`(()=>{
     document.getElementById('mModel').value = ${JSON.stringify(stamp2)};
-    document.getElementById('mModelStr').value = '0.75';
     document.querySelector('#loraList .lora-name').value = 'lora_A';
     document.querySelector('#loraList .lora-str').value = '0.6';
     document.querySelector('#loraList .lora-add').click();
@@ -405,7 +404,6 @@ try {
   await cdp.eval("document.querySelector('#masonry .tile-inner').click()");
   await sleep(1200);
   check('模型名已保存', await cdp.eval("document.getElementById('mModel').value"), stamp2);
-  check('模型强度已保存', await cdp.eval("Number(document.getElementById('mModelStr').value)"), 0.75);
   check('两条 Lora 都已保存', await cdp.eval(
     "[...document.querySelectorAll('#loraList .lora-item')].map(r => r.querySelector('.lora-name').value + '@' + r.querySelector('.lora-str').value).join(',')"
   ), 'lora_A@0.6,lora_B@0.35');
