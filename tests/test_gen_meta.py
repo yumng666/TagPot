@@ -246,6 +246,22 @@ def main():
         check("强度 0 的 Lora 被过滤", [x["name"] for x in gz["loras"]], ["on_lora"])
         check("保留的强度正确", gz["loras"][0]["strength"], 0.8)
 
+        print("\n[A1111 WebUI parameters]")
+        a111 = os.path.join(tmp, "a1111.png")
+        make_png(a111, {"parameters": (
+            "masterpiece, 1girl, <lora:detail_tweaker:0.4>, best quality\n"
+            "Negative prompt: bad anatomy, worst quality\n"
+            "Steps: 20, Sampler: Euler a, CFG scale: 7, Seed: 123, "
+            "Size: 832x1216, Model: anima_aestheticV11.safetensors")})
+        ga = server.read_gen_meta(a111)
+        check("A1111 engine", ga["engine"], "a1111")
+        check("A1111 正向（含内联 Lora）", ga["prompt"],
+              "masterpiece, 1girl, <lora:detail_tweaker:0.4>, best quality")
+        check("A1111 负向", ga["negative"], "bad anatomy, worst quality")
+        check("A1111 模型（无后缀）", ga["model"], "anima_aestheticV11")
+        check("A1111 内联 Lora", [(x["name"], x["strength"]) for x in ga["loras"]],
+              [("detail_tweaker", 0.4)])
+
         print("\n[普通图片]")
         gp = server.read_gen_meta(plain)
         check("engine 为空", gp["engine"], "")

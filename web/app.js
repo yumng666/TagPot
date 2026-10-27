@@ -545,10 +545,6 @@ async function loadFolder(node) {
     $('#stageName').textContent = d.name;
     $('#stageSub').textContent = d.path;
     syncImages(d.images || [], true);
-    api('/api/autowrite', {
-      method: 'POST',
-      body: JSON.stringify({ path: d.path })
-    }).catch(() => { });   // 后台批量写入备注；失败不影响浏览
     if (!(d.images || []).length && token === S.loadToken) {
       // 这个文件夹本身没有图片：看看图片是不是都在子文件夹里
       try {

@@ -936,6 +936,45 @@ def _queue_autowrite(path):
     t.start()
 
 
+def _extract_a1111(text):
+    """A1111 WebUI 格式：tEXt 关键字 parameters。
+
+    结构：正向提示词（可多行）\nNegative prompt: 负向\nSteps: 20, Sampler: ..., Model: xxx, ...
+    Lora 以 <lora:名字:强度> 内联在正向里。
+    """
+    raw = text.get("parameters")
+    if not raw or "Steps:" not in raw:
+        return None
+    prompt_lines, neg_lines, params = [], [], {}
+    state = 0                        # 0=正向 1=负向
+    for ln in raw.splitlines():
+        t = ln.strip()
+        if state == 0 and t.startswith("Negative prompt:"):
+            state = 1
+            neg_lines.append(t[len("Negative prompt:"):].strip())
+            continue
+        if state == 1 and t.startswith("Steps:") and ":" in t:
+            for part in t.split(","):
+                if ":" in part:
+                    k, _, v = part.partition(":")
+                    params[k.strip().lower()] = v.strip()
+            continue
+        (neg_lines if state else prompt_lines).append(ln)
+    prompt = "\n".join(prompt_lines).strip()
+    neg = "\n".join(neg_lines).strip()
+    if not prompt and not params:
+        return None
+    model = _pretty_name(params.get("model", "").split(" [")[0].strip())
+    loras = []
+    for m in re.finditer(r"<lora:([^:>]+):(-?\d+\.?\d*)>", prompt):
+        nm = _pretty_name(m.group(1))
+        st = float(m.group(2))
+        if nm and st != 0:
+            loras.append({"name": nm, "strength": st})
+    return {"engine": "a1111", "model": model,
+            "loras": loras, "prompt": prompt, "naiVersion": None, "negative": neg}
+
+
 def _log_genmeta(path, text, note):
     """识别失败时记一条诊断日志（data/genmeta.log，只保留最近 200 条）。"""
     try:
@@ -966,7 +1005,8 @@ def read_gen_meta(path, debug=False):
     if not text:
         return empty
     try:
-        found = _extract_comfy(text) or _extract_nai(text) or _extract_workflow(text)
+        found = (_extract_comfy(text) or _extract_nai(text)
+                 or _extract_a1111(text) or _extract_workflow(text))
     except Exception as exc:
         found = None
         if debug:
