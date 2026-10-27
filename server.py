@@ -361,6 +361,239 @@ def _orientation_swap(size, orientation):
     return size
 
 
+# --------------------------------------------------------------------------- 生成参数（ComfyUI / NovelAI）
+ANNO_PATH = os.path.join(DATA_DIR, "annotations.json")
+_anno_cache = {"mtime": None, "data": {}}
+
+
+def _num(v, default=None):
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return default
+    return f
+
+
+def _base_name(v):
+    return os.path.basename((v or "").replace("\\", "/"))
+
+
+def _anno_all():
+    try:
+        mtime = os.stat(ANNO_PATH).st_mtime_ns
+    except Exception:
+        return {}
+    if _anno_cache["mtime"] != mtime:
+        _anno_cache["data"] = _load_json(ANNO_PATH, {}) or {}
+        _anno_cache["mtime"] = mtime
+    return _anno_cache["data"]
+
+
+def _anno_get(path):
+    return _anno_all().get(path) or {}
+
+
+def _anno_set(path, patch):
+    data = dict(_anno_all())
+    item = dict(data.get(path) or {})
+    for key, val in patch.items():
+        if val is None:      # None 表示撤销该项自定义
+            item.pop(key, None)
+        else:
+            item[key] = val
+    if item:
+        data[path] = item
+    else:
+        data.pop(path, None)
+    _save_json(ANNO_PATH, data)
+    _anno_cache["mtime"] = None
+    return item
+
+
+def _png_text(path):
+    """取 PNG 的 tEXt/iTXt 文本块；非 PNG 返回 {}。"""
+    if Image is None:
+        return {}
+    try:
+        with Image.open(path) as im:
+            if (im.format or "").upper() != "PNG":
+                return {}
+            return {str(k): (v.decode("utf-8", "ignore") if isinstance(v, bytes) else str(v))
+                    for k, v in (getattr(im, "text", None) or {}).items()}
+    except Exception:
+        return {}
+
+
+def _follow_text(nodes, link, seen=None, depth=0):
+    """顺着 KSampler 的 positive 连线找到 CLIPTextEncode 的 text。"""
+    if depth > 6 or not (isinstance(link, (list, tuple)) and len(link) == 2):
+        return ""
+    nid = str(link[0])
+    seen = seen if seen is not None else set()
+    if nid in seen:
+        return ""
+    seen.add(nid)
+    node = nodes.get(nid)
+    if not isinstance(node, dict):
+        return ""
+    inputs = node.get("inputs") or {}
+    for tkey in ("text", "text_g", "text_l", "string", "positive_prompt", "prompt"):
+        val = inputs.get(tkey)
+        if isinstance(val, str) and val.strip():
+            return val
+    for key in ("positive", "conditioning", "conditioning_1", "conditioning_to",
+                "conditioning_from", "clip", "text_from", "value", "conditioning_2"):
+        if key in inputs:
+            got = _follow_text(nodes, inputs[key], seen, depth + 1)
+            if got:
+                return got
+    for val in inputs.values():
+        if isinstance(val, (list, tuple)) and len(val) == 2 and isinstance(val[0], str):
+            got = _follow_text(nodes, val, seen, depth + 1)
+            if got:
+                return got
+    return ""
+
+
+def _comfy_prompt(nodes):
+    for node in nodes.values():
+        if not isinstance(node, dict):
+            continue
+        ct = str(node.get("class_type") or "")
+        if ct.startswith("KSampler") or ct in ("SamplerCustom", "SamplerCustomAdvanced"):
+            got = _follow_text(nodes, (node.get("inputs") or {}).get("positive"))
+            if got:
+                return got
+    # 兜底：取最长的一段文本（正向通常更长）
+    texts = []
+    for node in nodes.values():
+        if not isinstance(node, dict):
+            continue
+        t = (node.get("inputs") or {}).get("text")
+        if isinstance(t, str) and t.strip():
+            texts.append(t)
+    texts.sort(key=len, reverse=True)
+    return texts[0] if texts else ""
+
+
+def _parse_comfy(nodes):
+    model, loras = "", []
+    for node in nodes.values():
+        if not isinstance(node, dict):
+            continue
+        ct = str(node.get("class_type") or "")
+        inputs = node.get("inputs") or {}
+        if not model and ct in ("CheckpointLoaderSimple", "CheckpointLoader",
+                                "ImageOnlyCheckpointLoader"):
+            model = _base_name(inputs.get("ckpt_name"))
+        if not model and ct in ("UNETLoader", "UnetLoaderGGUF"):
+            model = _base_name(inputs.get("unet_name"))
+        if ct in ("LoraLoader", "LoraLoaderModelOnly"):
+            name = _base_name(inputs.get("lora_name"))
+            if name:
+                loras.append({"name": name,
+                              "strength": _num(inputs.get("strength_model"), 1.0)})
+    return model, loras, _comfy_prompt(nodes)
+
+
+def _extract_comfy(text):
+    raw = text.get("prompt")
+    if not raw or not raw.strip().startswith("{"):
+        return None
+    try:
+        nodes = json.loads(raw)
+    except Exception:
+        return None
+    if not isinstance(nodes, dict) or not nodes:
+        return None
+    sample = next(iter(nodes.values()))
+    if not isinstance(sample, dict) or "class_type" not in sample:
+        return None
+    model, loras, prompt = _parse_comfy(nodes)
+    return {"engine": "comfyui", "model": model, "modelStrength": 1.0,
+            "loras": loras, "prompt": prompt, "naiVersion": None}
+
+
+def _nai_version(data, source):
+    m = re.search(r"[Vv](\d+(?:\.\d+)?)", source or "")
+    if m:
+        return m.group(1)
+    if "v4_prompt" in data:
+        return "4"
+    if "xl" in (source or "").lower():
+        return "3"
+    return ""
+
+
+def _extract_nai(text):
+    software = (text.get("Software") or "").strip()
+    source = (text.get("Source") or "").strip()
+    raw = text.get("Comment") or text.get("comment") or ""
+    data = {}
+    if raw.strip().startswith("{"):
+        try:
+            data = json.loads(raw)
+        except Exception:
+            data = {}
+    looks_nai = (
+        "novelai" in software.lower()
+        or "novelai" in source.lower()
+        or ("uc" in data and "steps" in data)
+        or "noise_schedule" in data
+        or "v4_prompt" in data
+    )
+    if not looks_nai:
+        return None
+
+    ver = _nai_version(data, source)
+    if not data:
+        return {
+            "engine": "novelai",
+            "model": ("Nai " + ver).strip() if ver else "Nai",
+            "modelStrength": None,
+            "loras": [],
+            "prompt": raw.strip(),
+            "naiVersion": ver or None,
+        }
+
+    if isinstance(data.get("v4_prompt"), dict):
+        cap = data["v4_prompt"].get("caption") or {}
+        parts = [str(cap.get("base_caption") or "")]
+        for c in (cap.get("char_captions") or []):
+            if isinstance(c, dict) and c.get("char_caption"):
+                parts.append(str(c["char_caption"]))
+        prompt = "\n\n".join(p for p in parts if p.strip())
+    else:
+        prompt = str(data.get("prompt") or "")
+
+    return {
+        "engine": "novelai",
+        "model": ("Nai " + ver).strip() if ver else "Nai",
+        "modelStrength": None,
+        "loras": [],
+        "prompt": prompt,
+        "naiVersion": ver or None,
+    }
+
+
+def read_gen_meta(path):
+    """从图片里读出 ComfyUI / NovelAI 的模型、Lora、正向提示词。"""
+    empty = {"engine": "", "model": "", "modelStrength": 1.0,
+             "loras": [], "prompt": "", "naiVersion": None,
+             "modelOverridden": False, "lorasOverridden": False, "promptOverridden": False}
+    text = _png_text(path)
+    if not text:
+        return empty
+    try:
+        found = _extract_comfy(text) or _extract_nai(text)
+    except Exception:
+        found = None
+    if not found:
+        return empty
+    empty.update(found)
+    return empty
+
+
 def image_meta(path: str):
     try:
         st = os.stat(path)
@@ -839,14 +1072,40 @@ class Handler(BaseHTTPRequestHandler):
             m = image_meta(target)
             if not m:
                 return self._err(404, "无法读取")
+            gen = read_gen_meta(target)
+            anno = _anno_get(target)
+
             c = read_native_comment(target)
-            if c is not None:
-                src = "property"
-            else:
+            if c is None:
                 c, src = read_comment(target)
+            else:
+                src = "property"
+
+            if c:
+                comment, prompt_done = c, True
+            elif anno.get("promptEdited"):
+                comment, prompt_done = "", True
+            else:
+                comment, prompt_done = gen.get("prompt") or "", False
+                if comment:
+                    src = "generated"
+
+            if isinstance(anno.get("model"), dict):
+                gen["model"] = anno["model"].get("name", gen.get("model", ""))
+                if "strength" in anno["model"]:
+                    gen["modelStrength"] = anno["model"]["strength"]
+                gen["modelOverridden"] = True
+            if isinstance(anno.get("loras"), list):
+                gen["loras"] = anno["loras"]
+                gen["lorasOverridden"] = True
+            gen["promptOverridden"] = prompt_done
+            if gen.get("engine") == "novelai" and not gen.get("lorasOverridden"):
+                gen["modelStrength"] = None
+
             m = dict(m)
-            m["comment"] = c
+            m["comment"] = comment
             m["commentSource"] = src
+            m["gen"] = gen
             m["format"] = os.path.splitext(target)[1].lstrip(".").upper()
             return self._send(200, m)
 
@@ -929,7 +1188,40 @@ class Handler(BaseHTTPRequestHandler):
                 return self._err(500, "写入失败：" + repr(e))
             _meta_cache.clear()
             _dir_cache.clear()
+            _anno_set(target, {"promptEdited": True})
             return self._send(200, {"ok": True, "where": where, "comment": text})
+
+        if p == "/api/annotation":
+            data = self._body()
+            target = resolve_allowed((data.get("path") or "").strip())
+            if not target or not os.path.isfile(target):
+                return self._err(404, "文件不可访问")
+            patch = {}
+            # 传 null 表示「恢复成自动检测」，用于撤销自定义
+            if "model" in data and data.get("model") is None:
+                patch["model"] = None
+            if "loras" in data and data.get("loras") is None:
+                patch["loras"] = None
+            if isinstance(data.get("model"), dict):
+                patch["model"] = {
+                    "name": str(data["model"].get("name") or "").strip(),
+                    "strength": _num(data["model"].get("strength"), 1.0),
+                }
+            if isinstance(data.get("loras"), list):
+                rows = []
+                for it in data["loras"]:
+                    if not isinstance(it, dict):
+                        continue
+                    name = str(it.get("name") or "").strip()
+                    if not name:
+                        continue
+                    rows.append({"name": name, "strength": _num(it.get("strength"), 1.0)})
+                patch["loras"] = rows
+            if not patch:
+                return self._err(400, "没有可保存的内容")
+            _anno_set(target, patch)
+            _meta_cache.clear()
+            return self._send(200, {"ok": True})
 
         if p == "/api/active":
             data = self._body()

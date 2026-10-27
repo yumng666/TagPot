@@ -663,6 +663,130 @@ function stopPoll() {
 }
 
 /* ------------------------------------------------------------ 弹窗 */
+/* ------------------------------------------------------------ 生成参数（模型 / Lora） */
+const LORA_PLUS_SVG =
+  '<svg viewBox="0 0 12 12" fill="none"><path d="M6 1.7v8.6M1.7 6h8.6" stroke="currentColor"'
+  + ' stroke-width="1.6" stroke-linecap="round"/></svg>';
+
+function makeLoraRow(item, isLast) {
+  const row = document.createElement('div');
+  row.className = 'lora-item';
+
+  const name = document.createElement('input');
+  name.type = 'text';
+  name.className = 'gen-input lora-name';
+  name.spellcheck = false;
+  name.placeholder = 'Lora 名称';
+  name.value = item.name || '';
+
+  const str = document.createElement('input');
+  str.type = 'number';
+  str.step = '0.05';
+  str.className = 'gen-input gen-str lora-str';
+  str.title = 'Lora 强度';
+  const v = item.strength;
+  str.value = (v === null || v === undefined) ? 1 : v;
+
+  row.appendChild(name);
+  row.appendChild(str);
+  if (isLast) row.appendChild(makeLoraAdd());
+  return row;
+}
+
+function makeLoraAdd() {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'lora-add';
+  btn.title = '添加一个 Lora';
+  btn.innerHTML = LORA_PLUS_SVG;
+  btn.addEventListener('click', () => {
+    const box = $('#loraList');
+    const last = box.lastElementChild;
+    if (last) {
+      const old = last.querySelector('.lora-add');
+      if (old) old.remove();
+    }
+    const row = makeLoraRow({ name: '', strength: 1 }, true);
+    box.appendChild(row);
+    row.querySelector('.lora-name').focus();
+    box.scrollTop = box.scrollHeight;
+  });
+  return btn;
+}
+
+function renderLoras(loras) {
+  const box = $('#loraList');
+  box.textContent = '';
+  const list = Array.isArray(loras) ? loras.filter((l) => l && l.name) : [];
+  if (!list.length) {
+    box.appendChild(makeLoraRow({ name: '', strength: 1 }, true));
+    return;
+  }
+  list.forEach((it, i) => box.appendChild(makeLoraRow(it, i === list.length - 1)));
+}
+
+function collectLoras() {
+  const out = [];
+  $('#loraList').querySelectorAll('.lora-item').forEach((row) => {
+    const name = row.querySelector('.lora-name').value.trim();
+    if (!name) return;
+    const raw = Number(row.querySelector('.lora-str').value);
+    out.push({ name, strength: isFinite(raw) ? raw : 1 });
+  });
+  return out;
+}
+
+function readModelStrength() {
+  const raw = $('#mModelStr').value.trim();
+  if (raw === '') return 1;
+  const n = Number(raw);
+  return isFinite(n) ? n : 1;
+}
+
+function fillGen(gen) {
+  const g = gen || {};
+  $('#genBlock').classList.toggle('nai', g.engine === 'novelai');
+  $('#mModel').value = g.model || '';
+  const ms = g.modelStrength;
+  $('#mModelStr').value = (ms === null || ms === undefined) ? '' : ms;
+  renderLoras(g.loras || []);
+  S.genSnap = { model: $('#mModel').value, strength: readModelStrength(), loras: collectLoras() };
+}
+
+function resetGen() {
+  $('#genBlock').classList.remove('nai');
+  $('#mModel').value = '';
+  $('#mModelStr').value = '';
+  $('#loraList').textContent = '';
+  S.genSnap = null;
+}
+
+async function saveGen(path) {
+  if (!S.genSnap) return;
+  const model = $('#mModel').value.trim();
+  const strength = readModelStrength();
+  const loras = collectLoras();
+  const snap = S.genSnap;
+  const patch = { path };
+  let dirty = false;
+  if (model !== snap.model || strength !== snap.strength) {
+    patch.model = { name: model, strength };
+    dirty = true;
+  }
+  if (JSON.stringify(loras) !== JSON.stringify(snap.loras)) {
+    patch.loras = loras;
+    dirty = true;
+  }
+  if (!dirty) return;
+  const token = S.metaToken;
+  try {
+    await api('/api/annotation', { method: 'POST', body: JSON.stringify(patch) });
+    if (token === S.metaToken) S.genSnap = { model, strength, loras };
+  } catch (e) {
+    toast('模型 / Lora 保存失败：' + e.message, 'bad');
+  }
+}
+
 async function openModal(path) {
   const idx = S.images.findIndex(i => i.path === path);
   if (idx < 0) return;
@@ -691,6 +815,7 @@ async function showModal(i) {
   S.noteOriginal = '';
   $('#mNoteSrc').textContent = '图片属性 · 关闭弹窗自动保存';
   $('#mState').classList.remove('on');
+  resetGen();
 
   const token = ++S.metaToken;
   try {
@@ -706,9 +831,11 @@ async function showModal(i) {
     const srcText = {
       property: '图片属性 · 关闭弹窗自动保存',
       exif: '图片属性（EXIF）· 关闭弹窗自动保存',
+      generated: '自动读取自生成参数 · 关闭弹窗自动保存',
       sidecar: '该格式无法写入文件属性，备注只存在应用内'
     };
     $('#mNoteSrc').textContent = srcText[m.commentSource] || srcText.property;
+    fillGen(m.gen);
   } catch (e) {
     if (token === S.metaToken) note.placeholder = '备注读取失败';
   }
@@ -718,27 +845,36 @@ async function closeModal() {
   if (!S.modalOpen) return;
   S.modalOpen = false;
   $('#mask').classList.remove('on');
+  await persistModal();
+}
 
+/** 保存当前弹窗里的备注与模型/Lora，切图或关闭时调用 */
+async function persistModal() {
   const it = S.images[S.modalIdx];
-  const note = $('#mNote').value;
   if (!it) return;
-  if (note === S.noteOriginal) return;
-  try {
-    await api('/api/comment', {
-      method: 'POST',
-      body: JSON.stringify({ path: it.path, comment: note })
-    });
-    it.comment = note;
-    S.noteOriginal = note;
-    toast('备注已保存');
-  } catch (e) {
-    toast('备注保存失败：' + e.message, 'bad');
+  const path = it.path;
+  const note = $('#mNote').value;
+
+  if (note !== S.noteOriginal) {
+    try {
+      await api('/api/comment', {
+        method: 'POST',
+        body: JSON.stringify({ path, comment: note })
+      });
+      it.comment = note;
+      if (S.images[S.modalIdx] && S.images[S.modalIdx].path === path) S.noteOriginal = note;
+      toast('备注已保存');
+    } catch (e) {
+      toast('备注保存失败：' + e.message, 'bad');
+    }
   }
+  await saveGen(path);
 }
 
 function step(delta) {
   if (!S.images.length) return;
   const n = S.images.length;
+  persistModal();
   showModal((S.modalIdx + delta + n) % n);
 }
 

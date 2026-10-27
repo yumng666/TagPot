@@ -730,6 +730,113 @@ body {
 }
 
 /* --- 备注 --- */
+/* --- 生成参数（模型 / Lora） --- */
+.gen-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.gen-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+
+.gen-row > label {
+  padding-top: 9px;
+  font-size: 11.5px;
+  color: var(--ink-3);
+  letter-spacing: .2px;
+}
+
+.gen-fields {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+}
+
+.gen-input {
+  min-width: 0;
+  height: 32px;
+  padding: 0 9px;
+  border-radius: 9px;
+  border: 1px solid var(--line);
+  background: #fbfdff;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 12.5px;
+  outline: none;
+  transition: border-color .18s, box-shadow .18s, background .18s;
+}
+
+.gen-input::placeholder { color: #b6c3d8; }
+
+.gen-input:focus {
+  border-color: var(--blue-300);
+  background: #fff;
+  box-shadow: 0 0 0 3px rgba(29, 91, 255, .1);
+}
+
+#mModel { flex: 1; }
+
+.gen-str {
+  width: 62px;
+  flex: none;
+  text-align: right;
+  padding: 0 7px;
+}
+
+.gen-str::-webkit-inner-spin-button,
+.gen-str::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+
+.lora-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-height: 126px;
+  overflow-y: auto;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.lora-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.lora-item .lora-name { flex: 1; }
+.lora-item .lora-str { width: 58px; }
+
+/* 线条圆形 + 号，只出现在最后一行 Lora 的右侧 */
+.lora-add {
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1.5px solid var(--blue-300);
+  background: transparent;
+  color: var(--blue-600);
+  cursor: pointer;
+  transition: background .18s, border-color .18s, color .18s, transform .18s;
+}
+
+.lora-add svg { width: 11px; height: 11px; }
+.lora-add:hover { background: var(--blue-600); border-color: var(--blue-600); color: #fff; }
+.lora-add:active { transform: scale(.92); }
+
+/* NovelAI：不显示模型强度与 Lora */
+.gen-block.nai .gen-str,
+.gen-block.nai #loraRow { display: none; }
+
+.gen-block.nai .gen-fields { max-width: 100%; }
+
 .note-block {
   display: flex;
   flex-direction: column;

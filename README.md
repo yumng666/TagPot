@@ -66,6 +66,13 @@ build_installer.bat  # 打 dist\TagPot-Setup-<版本>.exe（需 NSIS 解压到 t
 
 点击任意图片打开。左侧图片，右侧自上而下：图片名称、创建日期、分辨率、文件大小、格式、备注。
 
+- **模型 / Lora**：自动识别 ComfyUI 与 NovelAI 的元数据。
+  ComfyUI 取 `CheckpointLoader` 的模型名、`LoraLoader` 的文件名与强度、以及 `KSampler` 的 `positive`
+  连到的正向提示词；NovelAI 只显示「Nai + 版本」（如 `Nai 3` / `Nai 4` / `Nai 4.5`），不显示模型强度与 Lora。
+  ![模型与 Lora](tests/shots/09-model-comfy.png)
+- 模型、Lora、备注**三项都可以手改**，改过哪一项以后就显示你改的值，没改的继续跟元数据自动同步；
+  Lora 最后一行右侧有个圆形加号按钮，点一下追加一行（按钮始终只有一个）。
+  自定义内容存在 `data/annotations.json`，备注本身仍然写进文件属性。
 - 备注就是 **Windows 文件属性里的「备注」**（右键 → 属性 → 详细信息 → 备注，即
   `System.Comment`），通过 Windows 属性系统读写，不另建一套自己的备注。
   JPEG / PNG 等格式由系统按各自规范落盘（实测 JPEG 落 `XPComment`、PNG 落 XMP），
@@ -123,12 +130,19 @@ dist/
 | GET | `/api/images?path=` | 列出图片 + 子目录 |
 | GET | `/api/meta?path=` | 名称/时间/分辨率/大小/备注 |
 | POST | `/api/comment` | 写入备注 `{path, comment}` |
+| POST | `/api/annotation` | 保存模型 / Lora 的自定义 `{path, model, loras}`，传 `null` 表示撤销 |
 | GET | `/api/thumb?path=&w=` | 缩略图（磁盘缓存） |
 | GET | `/api/full?path=` | 原图 |
 
 只允许访问已登记根目录内部的文件，路径不合法一律 404。
 
 ## 验证
+
+生成参数解析（ComfyUI / NovelAI，纯 Python，现造样本图）：
+
+```
+python tests/test_gen_meta.py
+```
 
 界面逻辑（无头 Chromium 里真操作，含截图）—— 对 exe 也适用，先启动 TagPot.exe 再跑：
 

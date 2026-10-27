@@ -344,6 +344,59 @@ try {
   check('关闭按钮可关闭', await cdp.eval("document.getElementById('mask').classList.contains('on')"), false);
   await cdp.shot('05-after-close');
 
+  console.log('\n[6b] 模型 / Lora');
+  // 先清掉可能残留的自定义，保证这组用例可重复运行
+  const tileName = await cdp.eval("(document.querySelector('#masonry .tile img') || {}).alt || ''");
+  const curFolder = await cdp.eval("document.getElementById('pathText').textContent");
+  const tileImg = (await apiImages(curFolder)).images.find((i) => i.name === tileName);
+  const clearAnno = () => fetch(BASE + '/api/annotation', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: tileImg.path, model: null, loras: null }),
+  });
+  await clearAnno();
+
+  await cdp.eval("document.querySelector('#masonry .tile-inner').click()");
+  await sleep(1100);
+  check('演示图没有生成参数（模型为空）', await cdp.eval("document.getElementById('mModel').value"), '');
+  check('初始只有一个加号按钮', await cdp.eval("document.querySelectorAll('#loraList .lora-add').length"), 1);
+
+  const stamp2 = 'test-model-' + Date.now();
+  await cdp.eval(`(()=>{
+    document.getElementById('mModel').value = ${JSON.stringify(stamp2)};
+    document.getElementById('mModelStr').value = '0.75';
+    document.querySelector('#loraList .lora-name').value = 'lora_A';
+    document.querySelector('#loraList .lora-str').value = '0.6';
+    document.querySelector('#loraList .lora-add').click();
+  })()`);
+  await sleep(250);
+  check('点击加号后多出一行', await cdp.eval("document.querySelectorAll('#loraList .lora-item').length"), 2);
+  check('加号仍然只有一个，且在最后一行', await cdp.eval(`(()=>{
+    const rows = [...document.querySelectorAll('#loraList .lora-item')];
+    const last = rows[rows.length - 1];
+    return document.querySelectorAll('#loraList .lora-add').length === 1
+      && !!last.querySelector('.lora-add');
+  })()`), true);
+
+  await cdp.eval(`(()=>{
+    const rows = [...document.querySelectorAll('#loraList .lora-item')];
+    const last = rows[rows.length - 1];
+    last.querySelector('.lora-name').value = 'lora_B';
+    last.querySelector('.lora-str').value = '0.35';
+  })()`);
+  await cdp.eval("document.getElementById('mClose').click()");
+  await sleep(1200);
+
+  await cdp.eval("document.querySelector('#masonry .tile-inner').click()");
+  await sleep(1200);
+  check('模型名已保存', await cdp.eval("document.getElementById('mModel').value"), stamp2);
+  check('模型强度已保存', await cdp.eval("Number(document.getElementById('mModelStr').value)"), 0.75);
+  check('两条 Lora 都已保存', await cdp.eval(
+    "[...document.querySelectorAll('#loraList .lora-item')].map(r => r.querySelector('.lora-name').value + '@' + r.querySelector('.lora-str').value).join(',')"
+  ), 'lora_A@0.6,lora_B@0.35');
+  await cdp.eval("document.getElementById('mClose').click()");
+  await sleep(800);
+  await clearAnno();
+
   console.log('\n[7] 添加文件夹（内置选择器）');
   const before = await cdp.eval("document.querySelectorAll('#menu > .group').length");
   await cdp.eval("document.getElementById('addBtn').click()");
