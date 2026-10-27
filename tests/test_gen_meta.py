@@ -197,6 +197,39 @@ def main():
         check("版本 Nai 4", gr["model"], "Nai 4")
         check("原文当提示词", gr["prompt"], "1girl, solo, purple eyes")
 
+        print("\n[ComfyUI · 只有 workflow 块]")
+        wfonly = os.path.join(tmp, "wfonly.png")
+        make_png(wfonly, {"workflow": json.dumps({
+            "nodes": [
+                {"id": 1, "type": "CheckpointLoaderSimple",
+                 "widgets_values": ["anima_v11.safetensors"]},
+                {"id": 2, "type": "CLIPTextEncode", "widgets_values": ["1girl, best quality"]},
+                {"id": 3, "type": "CLIPTextEncode", "widgets_values": ["bad anatomy"]},
+                {"id": 9, "type": "KSampler", "widgets_values": [1, "fixed", 20, 7],
+                 "inputs": [{"name": "positive", "link": 11},
+                            {"name": "negative", "link": 12}]},
+            ],
+            "links": [[11, 2, 0, 9, 0, "CONDITIONING"],
+                      [12, 3, 0, 9, 1, "CONDITIONING"]],
+        })})
+        gw = server.read_gen_meta(wfonly)
+        check("workflow 兜底：engine", gw["engine"], "comfyui")
+        check("workflow 兜底：正向", gw["prompt"], "1girl, best quality")
+        check("workflow 兜底：模型", gw["model"], "anima_v11")
+
+        print("\n[识别失败写诊断日志]")
+        nolog = os.path.join(tmp, "nolog.png")
+        make_png(nolog, {"Software": "Nothing"})
+        server.DATA_DIR = tmp
+        gl = os.path.join(tmp, "genmeta.log")
+        if os.path.exists(gl):
+            os.remove(gl)
+        server.read_gen_meta(nolog)
+        check("诊断日志已生成", os.path.exists(gl), True)
+        line = json.loads(open(gl, encoding="utf-8").read().splitlines()[-1])
+        check("日志含路径", os.path.basename(line["path"]), "nolog.png")
+        check("日志含块类型", "tEXt" in line["chunks"], True)
+
         print("\n[普通图片]")
         gp = server.read_gen_meta(plain)
         check("engine 为空", gp["engine"], "")

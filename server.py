@@ -481,6 +481,65 @@ def _anno_set(path, patch):
     return item
 
 
+def _png_text_raw(path):
+    """直接按 PNG 结构抽文本块（tEXt/zTXt/iTXt），不限位置。
+
+    Pillow 的 im.text 只包含图片数据之前的块；有些工具会把元数据写在文件尾部。
+    """
+    import zlib
+    out = {}
+
+    def put(k, v):
+        k = (k or "").strip()
+        if k and k not in out and v and v.strip():
+            try:
+                out[k] = v.decode("utf-8", "ignore") if isinstance(v, bytes) else str(v)
+            except Exception:
+                pass
+
+    try:
+        with open(path, "rb") as f:
+            if f.read(8)[:4] != b"\x89PNG":
+                return out
+            while True:
+                head = f.read(8)
+                if len(head) < 8:
+                    break
+                length = int.from_bytes(head[:4], "big")
+                ctype = head[4:8]
+                data = f.read(length) if ctype in (b"tEXt", b"zTXt", b"iTXt") else b""
+                if ctype not in (b"tEXt", b"zTXt", b"iTXt"):
+                    f.seek(length + 4, 1)
+                    if ctype == b"IEND" or length > 64 * 1024 * 1024:
+                        break
+                    continue
+                f.read(4)  # CRC
+                try:
+                    if ctype == b"tEXt":
+                        k, _, v = data.partition(b"\x00")
+                        put(k.decode("latin1", "ignore"), v)
+                    elif ctype == b"zTXt":
+                        k, _, rest = data.partition(b"\x00")
+                        put(k.decode("latin1", "ignore"),
+                            zlib.decompress(rest[1:]) if rest[:1] == b"\x00" else rest[1:])
+                    else:  # iTXt
+                        k, _, rest = data.partition(b"\x00")
+                        comp = rest[:1]
+                        rest = rest[2:]            # 压缩标记 + 方法
+                        _lang, _, rest = rest.partition(b"\x00")
+                        _trans, _, txt = rest.partition(b"\x00")
+                        if comp == b"\x01":
+                            txt = zlib.decompress(txt)
+                        put(k.decode("utf-8", "ignore"), txt.decode("utf-8", "ignore"))
+                except Exception:
+                    continue
+                if ctype == b"IEND" or length > 64 * 1024 * 1024:
+                    break
+    except Exception:
+        pass
+    return out
+
+
 def _png_chunk_types(path):
     """直接按 PNG 结构扫块类型，绕开 Pillow —— 用于诊断元数据是否存在。"""
     types = []
@@ -504,17 +563,20 @@ def _png_chunk_types(path):
 
 
 def _png_text(path):
-    """取 PNG 的 tEXt/iTXt 文本块；非 PNG 返回 {}。"""
-    if Image is None:
-        return {}
+    """取 PNG 的文本块：Pillow 读头部块，再叠加原始扫描（不限位置）。"""
+    out = {}
     try:
-        with Image.open(path) as im:
-            if (im.format or "").upper() != "PNG":
-                return {}
-            return {str(k): (v.decode("utf-8", "ignore") if isinstance(v, bytes) else str(v))
-                    for k, v in (getattr(im, "text", None) or {}).items()}
+        if Image is not None:
+            with Image.open(path) as im:
+                if (im.format or "").upper() != "PNG":
+                    return {}
+                out = {str(k): (v.decode("utf-8", "ignore") if isinstance(v, bytes) else str(v))
+                       for k, v in (getattr(im, "text", None) or {}).items()}
     except Exception:
-        return {}
+        out = {}
+    for k, v in _png_text_raw(path).items():
+        out.setdefault(k, v)          # Pillow 没读到的位置（如文件尾部）在这里补上
+    return out
 
 
 def _follow_text(nodes, link, seen=None, depth=0):
@@ -695,6 +757,98 @@ def _extract_nai(text):
     }
 
 
+def _extract_workflow(text):
+    """prompt 块缺失时，退而解析 workflow（界面图）块。
+
+    界面图里提示词存在文本节点的 widgets_values，顺着采样器的
+    positive / negative 连线在 links 表里回溯即可。
+    """
+    raw = text.get("workflow")
+    if not raw or not raw.strip().startswith("{"):
+        return None
+    try:
+        wf = json.loads(raw)
+    except Exception:
+        return None
+    nodes = {}
+    for n in (wf.get("nodes") or []):
+        if isinstance(n, dict) and n.get("id") is not None:
+            nodes[n["id"]] = n
+    links = {}
+    for l in (wf.get("links") or []):
+        try:
+            links[int(l[0])] = (int(l[1]), int(l[3]))     # link id -> (源节点, 目标节点)
+        except Exception:
+            continue
+    if not nodes:
+        return None
+
+    def text_of(nid, depth=0):
+        n = nodes.get(nid)
+        if not isinstance(n, dict) or depth > 6:
+            return ""
+        wv = n.get("widgets_values")
+        if isinstance(wv, list) and wv and isinstance(wv[0], str) and wv[0].strip():
+            return wv[0]
+        for inp in (n.get("inputs") or []):
+            try:
+                src = links[int(inp.get("link"))][0]
+            except Exception:
+                continue
+            got = text_of(src, depth + 1)
+            if got:
+                return got
+        return ""
+
+    model, loras, pos, neg = "", [], "", ""
+    for n in nodes.values():
+        t = str(n.get("type") or "").lower()
+        wv = n.get("widgets_values") if isinstance(n.get("widgets_values"), list) else []
+        if not model and ("checkpoint" in t or "unet" in t) and wv:
+            model = _pretty_name(wv[0])
+        if "loraloader" in t.replace(" ", ""):
+            for w in wv:
+                if isinstance(w, str):
+                    loras.extend(_parse_lora_list(w))
+            if wv and isinstance(wv[0], str) and not wv[0].strip().startswith("["):
+                nm = _pretty_name(wv[0])
+                if nm:
+                    loras.append({"name": nm, "strength": _num(wv[1] if len(wv) > 1 else None, 1.0)})
+        if "sampler" in t:
+            for inp in (n.get("inputs") or []):
+                nm = inp.get("name")
+                lid = inp.get("link")
+                if nm in ("positive", "negative") and lid in links:
+                    got = text_of(links[lid][0])
+                    if nm == "positive" and got:
+                        pos = got
+                    elif nm == "negative" and got:
+                        neg = got
+    if not (pos or model or loras):
+        return None
+    return {"engine": "comfyui", "model": model,
+            "modelStrength": 1.0 if model else None,
+            "loras": loras, "prompt": pos, "naiVersion": None, "negative": neg}
+
+
+def _log_genmeta(path, text, note):
+    """识别失败时记一条诊断日志（data/genmeta.log，只保留最近 200 条）。"""
+    try:
+        entry = json.dumps({"time": time.strftime("%m-%d %H:%M:%S"), "path": path,
+                            "chunks": _png_chunk_types(path)[:16],
+                            "keys": sorted(text.keys()), "note": note}, ensure_ascii=False)
+        logp = os.path.join(DATA_DIR, "genmeta.log")
+        lines = []
+        if os.path.exists(logp):
+            with open(logp, encoding="utf-8") as f:
+                lines = f.read().splitlines()[-199:]
+        lines.append(entry)
+        with open(logp, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines))
+    except Exception:
+        pass
+
+
 def read_gen_meta(path, debug=False):
     """从图片里读出 ComfyUI / NovelAI 的模型、Lora、正向提示词。"""
     empty = {"engine": "", "model": "", "modelStrength": None,
@@ -707,17 +861,19 @@ def read_gen_meta(path, debug=False):
     if not text:
         return empty
     try:
-        found = _extract_comfy(text) or _extract_nai(text)
+        found = _extract_comfy(text) or _extract_nai(text) or _extract_workflow(text)
     except Exception as exc:
         found = None
         if debug:
             empty["debug"]["parseError"] = repr(exc)
+        _log_genmeta(path, text, "解析异常 " + repr(exc))
     if not found:
         if debug:
             empty["debug"]["note"] = "没有可识别的生成元数据"
             raw = text.get("prompt")
             if raw:
                 empty["debug"]["promptChunkHead"] = raw[:200]
+        _log_genmeta(path, text, "没有可识别的生成元数据")
         return empty
     empty.update(found)
     return empty
