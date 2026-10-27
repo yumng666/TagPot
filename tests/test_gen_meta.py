@@ -129,6 +129,26 @@ def main():
         check("正向提示词含角色描述", g4["prompt"],
               lambda v: "1girl, hoodie, night city" in v and "purple eyes" in v)
 
+        print("\n[ComfyUI · Anima 采样器（类名不含 KSampler）]")
+        anima2 = os.path.join(tmp, "anima_ks.png")
+        make_png(anima2, {"prompt": json.dumps({
+            "9": {"class_type": "AnimaKSampler", "inputs": {
+                "seed": 5, "positive": ["6", 0], "negative": ["7", 0],
+                "model": ["1", 0], "latent_image": ["5", 0]}},
+            "1": {"class_type": "CheckpointLoaderSimple",
+                  "inputs": {"ckpt_name": "anima_v11.safetensors"}},
+            "5": {"class_type": "EmptyLatentImage", "inputs": {"width": 832, "height": 1216}},
+            "6": {"class_type": "CLIPTextEncode",
+                  "inputs": {"text": "1girl, short hair, best quality", "clip": ["1", 1]}},
+            "7": {"class_type": "CLIPTextEncode",
+                  "inputs": {"text": "score_1, score_2, bad anatomy, worst quality",
+                             "clip": ["1", 1]}},
+        })})
+        gk = server.read_gen_meta(anima2)
+        check("正向不是负向", gk["prompt"], "1girl, short hair, best quality")
+        check("负向也解析出来", gk["negative"], "score_1, score_2, bad anatomy, worst quality")
+        check("模型（无后缀）", gk["model"], "anima_v11")
+
         print("\n[ComfyUI · SDXL 双文本]")
         sdxl = os.path.join(tmp, "sdxl.png")
         make_png(sdxl, {"prompt": json.dumps({

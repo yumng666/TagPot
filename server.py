@@ -527,16 +527,34 @@ def _follow_text(nodes, link, seen=None, depth=0):
     return ""
 
 
-def _comfy_prompt(nodes):
+def _comfy_prompts(nodes):
+    """返回 (正向, 负向)。
+
+    ComfyUI 的采样器节点都把连线叫 positive / negative，跟类名无关
+    （KSampler、SamplerCustom、AnimaKSampler……），所以直接按输入名找，
+    不再依赖类名识别。
+    """
+    pos = neg = ""
+    for node in nodes.values():
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs") or {}
+        if "positive" not in inputs:
+            continue
+        pos = _follow_text(nodes, inputs.get("positive"))
+        neg = _follow_text(nodes, inputs.get("negative"))
+        if pos or neg:
+            return pos, neg
+    # 兜底：类名里带 sampler 的
     for node in nodes.values():
         if not isinstance(node, dict):
             continue
         ct = str(node.get("class_type") or "")
-        if ct.startswith("KSampler") or ct in ("SamplerCustom", "SamplerCustomAdvanced"):
+        if "sampler" in ct.lower():
             got = _follow_text(nodes, (node.get("inputs") or {}).get("positive"))
             if got:
-                return got
-    # 兜底：取最长的一段文本（正向通常更长）
+                return got, ""
+    # 再兜底：取最长的一段文本（正向通常更长）
     texts = []
     for node in nodes.values():
         if not isinstance(node, dict):
@@ -545,7 +563,7 @@ def _comfy_prompt(nodes):
         if isinstance(t, str) and t.strip():
             texts.append(t)
     texts.sort(key=len, reverse=True)
-    return texts[0] if texts else ""
+    return (texts[0] if texts else ""), ""
 
 
 def _parse_comfy(nodes):
@@ -570,7 +588,8 @@ def _parse_comfy(nodes):
             if "lora" not in key.lower():
                 continue
             loras.extend(_parse_lora_list(val))
-    return model, loras, _comfy_prompt(nodes)
+    pos, neg = _comfy_prompts(nodes)
+    return model, loras, pos, neg
 
 
 def _extract_comfy(text):
@@ -586,10 +605,11 @@ def _extract_comfy(text):
     sample = next(iter(nodes.values()))
     if not isinstance(sample, dict) or "class_type" not in sample:
         return None
-    model, loras, prompt = _parse_comfy(nodes)
+    model, loras, prompt, negative = _parse_comfy(nodes)
     return {"engine": "comfyui", "model": model,
             "modelStrength": 1.0 if model else None,
-            "loras": loras, "prompt": prompt, "naiVersion": None}
+            "loras": loras, "prompt": prompt, "naiVersion": None,
+            "negative": negative}
 
 
 def _nai_version(data, source):
@@ -1159,6 +1179,15 @@ class Handler(BaseHTTPRequestHandler):
             else:
                 src = "property"
 
+            # 早期版本曾把负向提示词误认成正向写进属性：这里改写回来
+            neg = (gen.get("negative") or "").strip()
+            if c and neg and c.strip() == neg:
+                try:
+                    if write_native_comment(target, gen["prompt"]):
+                        c, src = gen["prompt"], "property"
+                except Exception:
+                    pass
+
             if (not c and not anno.get("promptEdited")
                     and (gen.get("prompt") or "").strip()):
                 # 属性里还没有备注，而图里有正向提示词：自动补写，
@@ -1187,6 +1216,7 @@ class Handler(BaseHTTPRequestHandler):
                 gen["loras"] = anno["loras"]
                 gen["lorasOverridden"] = True
             gen["promptOverridden"] = prompt_done
+            gen.pop("negative", None)   # 内部字段，不下发
             if gen.get("engine") == "novelai" and not gen.get("lorasOverridden"):
                 gen["modelStrength"] = None
 

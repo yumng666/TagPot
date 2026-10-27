@@ -742,10 +742,6 @@ body {
   flex-direction: column;
   gap: 6px;
   min-width: 0;
-  max-height: 126px;
-  overflow-y: auto;
-  padding-right: 2px;
-  scrollbar-width: thin;
 }
 
 .lora-item {
