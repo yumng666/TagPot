@@ -1104,6 +1104,12 @@ def _pk_comment():
 
 
 def _open_propstore(path, writable):
+    store, _hr = _open_propstore_hr(path, writable)
+    return store
+
+
+def _open_propstore_hr(path, writable):
+    """打开属性存储，返回 (store, HRESULT)。失败时 store 为 None。"""
     _ensure_com()
     store = ctypes.c_void_p()
     hr = _shell32.SHGetPropertyStoreFromParsingName(
@@ -1111,8 +1117,8 @@ def _open_propstore(path, writable):
         0x2 if writable else 0,
         ctypes.byref(_IID_IPropertyStore), ctypes.byref(store))
     if hr != 0 or not store.value:
-        return None
-    return store
+        return None, hr
+    return store, hr
 
 
 def read_native_comment(path):
@@ -1153,12 +1159,15 @@ def write_native_comment(path, text, tries=3):
     if pk is None:
         return False
     store = None
+    last = "open"
     for attempt in range(tries):
-        store = _open_propstore(path, True)
+        store, hr = _open_propstore_hr(path, True)
         if store is not None:
             break
+        last = "open hr=0x%08X" % (hr & 0xFFFFFFFF)
         time.sleep(0.12)
     if store is None:
+        _log_genmeta(path, {}, "属性存储打不开（" + last + "）")
         return False
     try:
         buf = ctypes.create_unicode_buffer(text or "")
@@ -1167,12 +1176,17 @@ def write_native_comment(path, text, tries=3):
         ptr = ctypes.c_void_p(ctypes.addressof(buf))
         ctypes.memmove(ctypes.addressof(pv) + 8, ctypes.byref(ptr), 8)
         fn = _vfn(store, 6, ctypes.POINTER(_PROPERTYKEY), ctypes.POINTER(_PROPVARIANT))
-        if fn(store, ctypes.byref(pk), ctypes.byref(pv)) != 0:
+        hr = fn(store, ctypes.byref(pk), ctypes.byref(pv))
+        if hr != 0:
+            _log_genmeta(path, {}, "SetValue 失败 hr=0x%08X" % (hr & 0xFFFFFFFF))
             return False
-        if _vfn(store, 7)(store) != 0:   # Commit
+        hr = _vfn(store, 7)(store)   # Commit
+        if hr != 0:
+            _log_genmeta(path, {}, "Commit 失败 hr=0x%08X" % (hr & 0xFFFFFFFF))
             return False
         return True
-    except Exception:
+    except Exception as exc:
+        _log_genmeta(path, {}, "写入异常 " + repr(exc))
         return False
     finally:
         try:
@@ -1427,6 +1441,9 @@ class Handler(BaseHTTPRequestHandler):
                 "active": STATE["active"],
             })
 
+        if p == "/api/autowrite/status":
+            return self._send(200, dict(_aw_state))
+
         if p == "/api/dirs":
             target = resolve_allowed((qs.get("path") or [""])[0])
             if not target or not os.path.isdir(target):
@@ -1581,9 +1598,6 @@ class Handler(BaseHTTPRequestHandler):
                 return self._err(404, "目录不可访问")
             _queue_autowrite(target)
             return self._send(200, {"ok": True, "status": _aw_state})
-
-        if p == "/api/autowrite/status":
-            return self._send(200, dict(_aw_state))
 
         if p == "/api/roots/remove":
             data = self._body()
