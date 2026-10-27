@@ -370,11 +370,18 @@ try {
   })()`);
   await sleep(250);
   check('点击加号后多出一行', await cdp.eval("document.querySelectorAll('#loraList .lora-item').length"), 2);
-  check('加号仍然只有一个，且在最后一行', await cdp.eval(`(()=>{
-    const rows = [...document.querySelectorAll('#loraList .lora-item')];
-    const last = rows[rows.length - 1];
+  check('加号只有一个，独占最后一行', await cdp.eval(`(()=>{
+    const box = document.getElementById('loraList');
+    const last = box.lastElementChild;
     return document.querySelectorAll('#loraList .lora-add').length === 1
-      && !!last.querySelector('.lora-add');
+      && last.classList.contains('lora-add-row');
+  })()`), true);
+  check('Lora 名字不再被加号挤占', await cdp.eval(`(()=>{
+    const name = document.querySelector('#loraList .lora-name');
+    const row = name.closest('.lora-item');
+    const btn = document.querySelector('#loraList .lora-add');
+    return name.getBoundingClientRect().right <= row.getBoundingClientRect().right + 1
+      && !row.contains(btn);
   })()`), true);
 
   await cdp.eval(`(()=>{

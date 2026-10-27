@@ -668,7 +668,7 @@ const LORA_PLUS_SVG =
   '<svg viewBox="0 0 12 12" fill="none"><path d="M6 1.7v8.6M1.7 6h8.6" stroke="currentColor"'
   + ' stroke-width="1.6" stroke-linecap="round"/></svg>';
 
-function makeLoraRow(item, isLast) {
+function makeLoraRow(item) {
   const row = document.createElement('div');
   row.className = 'lora-item';
 
@@ -689,7 +689,6 @@ function makeLoraRow(item, isLast) {
 
   row.appendChild(name);
   row.appendChild(str);
-  if (isLast) row.appendChild(makeLoraAdd());
   return row;
 }
 
@@ -701,13 +700,9 @@ function makeLoraAdd() {
   btn.innerHTML = LORA_PLUS_SVG;
   btn.addEventListener('click', () => {
     const box = $('#loraList');
-    const last = box.lastElementChild;
-    if (last) {
-      const old = last.querySelector('.lora-add');
-      if (old) old.remove();
-    }
-    const row = makeLoraRow({ name: '', strength: 1 }, true);
-    box.appendChild(row);
+    const wrap = box.querySelector('.lora-add-row');
+    const row = makeLoraRow({ name: '', strength: 1 });
+    box.insertBefore(row, wrap || null);
     row.querySelector('.lora-name').focus();
     box.scrollTop = box.scrollHeight;
   });
@@ -719,10 +714,14 @@ function renderLoras(loras) {
   box.textContent = '';
   const list = Array.isArray(loras) ? loras.filter((l) => l && l.name) : [];
   if (!list.length) {
-    box.appendChild(makeLoraRow({ name: '', strength: 1 }, true));
-    return;
+    box.appendChild(makeLoraRow({ name: '', strength: 1 }));
+  } else {
+    list.forEach((it) => box.appendChild(makeLoraRow(it)));
   }
-  list.forEach((it, i) => box.appendChild(makeLoraRow(it, i === list.length - 1)));
+  const wrap = document.createElement('div');
+  wrap.className = 'lora-add-row';
+  wrap.appendChild(makeLoraAdd());
+  box.appendChild(wrap);
 }
 
 function collectLoras() {

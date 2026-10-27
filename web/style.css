@@ -757,13 +757,14 @@ body {
   min-width: 0;
 }
 
+/* 平时只显示文字，点进去（聚焦）才出现输入框 */
 .gen-input {
   min-width: 0;
-  height: 32px;
-  padding: 0 9px;
-  border-radius: 9px;
-  border: 1px solid var(--line);
-  background: #fbfdff;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
   color: var(--ink);
   font-family: inherit;
   font-size: 12.5px;
@@ -772,6 +773,7 @@ body {
 }
 
 .gen-input::placeholder { color: #b6c3d8; }
+.gen-input:hover { background: rgba(29, 91, 255, .05); }
 
 .gen-input:focus {
   border-color: var(--blue-300);
@@ -811,6 +813,11 @@ body {
 
 .lora-item .lora-name { flex: 1; }
 .lora-item .lora-str { width: 58px; }
+
+.lora-add-row {
+  display: flex;
+  padding: 2px 0 0 2px;
+}
 
 /* 线条圆形 + 号，只出现在最后一行 Lora 的右侧 */
 .lora-add {
