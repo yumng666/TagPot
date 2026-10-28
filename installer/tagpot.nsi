@@ -1,4 +1,4 @@
-﻿; Tag Pot 安装包脚本（NSIS 3 / Unicode）
+; Tag Pot 安装包脚本（NSIS 3 / Unicode）
 ; 用 build_installer.bat 调用，产物在 dist\TagPot-Setup-<版本>.exe
 ;
 ; 采用「每用户安装」：装到 %LOCALAPPDATA%\Programs\TagPot，全程不需要管理员权限，
@@ -8,7 +8,7 @@ Unicode true
 
 !define APPNAME     "Tag Pot"
 !define APPEXE      "TagPot.exe"
-!define APPVERSION  "1.0.0"
+!define APPVERSION  "1.1.0"
 !define PUBLISHER   "yumng666"
 !define UNINSTKEY   "Software\Microsoft\Windows\CurrentVersion\Uninstall\TagPot"
 
