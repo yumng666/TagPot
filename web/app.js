@@ -545,6 +545,10 @@ async function loadFolder(node) {
     $('#stageName').textContent = d.name;
     $('#stageSub').textContent = d.path;
     syncImages(d.images || [], true);
+    api('/api/autowrite', {
+      method: 'POST',
+      body: JSON.stringify({ path: d.path })
+    }).catch(() => { });
     if (!(d.images || []).length && token === S.loadToken) {
       // 这个文件夹本身没有图片：看看图片是不是都在子文件夹里
       try {
@@ -624,6 +628,7 @@ function syncImages(images, reset) {
     }
   }
 
+  const added = [];
   next.forEach(it => {
     const rec = S.tiles.get(it.path);
     if (rec) {
@@ -632,8 +637,17 @@ function syncImages(images, reset) {
       rec.item = it;
     } else {
       createTile(it);
+      if (!reset) added.push(it.path);
     }
   });
+
+  if (added.length) {
+    // 打开着的文件夹里新出现的图：只把这几张交给后台写备注
+    api('/api/autowrite', {
+      method: 'POST',
+      body: JSON.stringify({ paths: added })
+    }).catch(() => { });
+  }
 
   S.images = next;
   layout();
@@ -904,13 +918,17 @@ async function persistModal() {
 
   if (note !== S.noteOriginal) {
     try {
-      await api('/api/comment', {
+      const r = await api('/api/comment', {
         method: 'POST',
         body: JSON.stringify({ path, comment: note })
       });
       it.comment = note;
       if (S.images[S.modalIdx] && S.images[S.modalIdx].path === path) S.noteOriginal = note;
-      toast('提示词已保存');
+      if (r && r.where && r.where !== 'property') {
+        toast('已存到应用内：这张图无法写入文件属性', 'bad');
+      } else {
+        toast('提示词已保存');
+      }
     } catch (e) {
       toast('提示词保存失败：' + e.message, 'bad');
     }

@@ -923,6 +923,22 @@ def _autowrite_worker():
     st["current"] = ""
 
 
+def _queue_autowrite_files(files):
+    """只处理指定文件（用于「打开着文件夹时新出现的图」）。"""
+    todo = [f for f in files if f not in _aw_done]
+    if not todo:
+        return
+
+    def run():
+        for fp in todo:
+            if fp in _aw_done:
+                continue
+            _aw_done.add(fp)
+            _autowrite_one(fp)
+
+    threading.Thread(target=run, daemon=True).start()
+
+
 def _queue_autowrite(path):
     path = os.path.abspath(path)
     if not os.path.isdir(path):
@@ -973,6 +989,47 @@ def _extract_a1111(text):
             loras.append({"name": nm, "strength": st})
     return {"engine": "a1111", "model": model,
             "loras": loras, "prompt": prompt, "naiVersion": None, "negative": neg}
+
+
+def _diag_write(path):
+    """属性写入失败时做一次现场诊断，结果进日志。
+
+    分别验证：文件自身属性、同目录能否新建并写属性、把该文件复制到同目录能否写。
+    """
+    info = {}
+    try:
+        st = os.stat(path)
+        info["size_mb"] = round(st.st_size / 1048576, 2)
+        info["readonly"] = not bool(st.st_mode & 0o200)
+        attr = getattr(st, "st_file_attributes", None)
+        if attr is not None:
+            info["attrs"] = hex(attr)
+    except Exception as exc:
+        info["stat_err"] = repr(exc)
+    d = os.path.dirname(path)
+    try:
+        from PIL import Image as _Img
+        tmp = os.path.join(d, "_tagpot_wtest.png")
+        _Img.new("RGB", (8, 8), (1, 2, 3)).save(tmp)
+        info["new_in_dir"] = write_native_comment(tmp, "x")
+        try:
+            os.remove(tmp)
+        except Exception:
+            pass
+    except Exception as exc:
+        info["new_in_dir_err"] = repr(exc)
+    try:
+        import shutil as _sh
+        cp = path + ".tagpottest.png"
+        _sh.copy2(path, cp)
+        info["copy_write"] = write_native_comment(cp, "x")
+        try:
+            os.remove(cp)
+        except Exception:
+            pass
+    except Exception as exc:
+        info["copy_write_err"] = repr(exc)
+    return info
 
 
 def _log_genmeta(path, text, note):
@@ -1239,7 +1296,8 @@ def _write_native_comment_locked(path, text, pk, tries):
         fn = _vfn(store, 6, ctypes.POINTER(_PROPERTYKEY), ctypes.POINTER(_PROPVARIANT))
         hr = fn(store, ctypes.byref(pk), ctypes.byref(pv))
         if hr != 0:
-            _log_genmeta(path, {}, "SetValue 失败 hr=0x%08X" % (hr & 0xFFFFFFFF))
+            _log_genmeta(path, {}, "SetValue 失败 hr=0x%08X 诊断=%s"
+                         % (hr & 0xFFFFFFFF, json.dumps(_diag_write(path), ensure_ascii=False)))
             return False
         hr = _vfn(store, 7)(store)   # Commit
         if hr != 0:
@@ -1653,6 +1711,16 @@ class Handler(BaseHTTPRequestHandler):
 
         if p == "/api/autowrite":
             data = self._body()
+            paths = data.get("paths")
+            if isinstance(paths, list) and paths:
+                files = []
+                for raw in paths[:500]:
+                    fp = resolve_allowed(str(raw or "").strip())
+                    if fp and os.path.isfile(fp):
+                        files.append(fp)
+                if files:
+                    _queue_autowrite_files(files)
+                return self._send(200, {"ok": True, "files": len(files)})
             target = resolve_allowed((data.get("path") or "").strip())
             if not target or not os.path.isdir(target):
                 return self._err(404, "目录不可访问")
