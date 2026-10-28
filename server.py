@@ -872,8 +872,15 @@ def _autowrite_tree(root):
     files = []
     for r, _dirs, fs in os.walk(root):
         for f in fs:
+            fp = os.path.join(r, f)
+            if f in ("_tagpot_wtest.png",) or f.endswith(".tagpottest.png"):
+                try:
+                    os.remove(fp)          # 早期诊断留下的临时图，顺手清掉
+                except Exception:
+                    pass
+                continue
             if os.path.splitext(f)[1].lower() in IMG_EXTS:
-                files.append(os.path.join(r, f))
+                files.append(fp)
     files.sort()
     st["total"] += len(files)
     counts = {"written": 0, "skipped": 0, "nodata": 0, "failed": 0}
@@ -992,10 +999,7 @@ def _extract_a1111(text):
 
 
 def _diag_write(path):
-    """属性写入失败时做一次现场诊断，结果进日志。
-
-    分别验证：文件自身属性、同目录能否新建并写属性、把该文件复制到同目录能否写。
-    """
+    """属性写入失败时的最小诊断：只读信息，不往用户目录写任何文件。"""
     info = {}
     try:
         st = os.stat(path)
@@ -1006,29 +1010,10 @@ def _diag_write(path):
             info["attrs"] = hex(attr)
     except Exception as exc:
         info["stat_err"] = repr(exc)
-    d = os.path.dirname(path)
     try:
-        from PIL import Image as _Img
-        tmp = os.path.join(d, "_tagpot_wtest.png")
-        _Img.new("RGB", (8, 8), (1, 2, 3)).save(tmp)
-        info["new_in_dir"] = write_native_comment(tmp, "x")
-        try:
-            os.remove(tmp)
-        except Exception:
-            pass
-    except Exception as exc:
-        info["new_in_dir_err"] = repr(exc)
-    try:
-        import shutil as _sh
-        cp = path + ".tagpottest.png"
-        _sh.copy2(path, cp)
-        info["copy_write"] = write_native_comment(cp, "x")
-        try:
-            os.remove(cp)
-        except Exception:
-            pass
-    except Exception as exc:
-        info["copy_write_err"] = repr(exc)
+        info["dir_writable"] = os.access(os.path.dirname(path), os.W_OK)
+    except Exception:
+        pass
     return info
 
 
@@ -1226,7 +1211,7 @@ def _open_propstore_hr(path, writable):
     return store, hr
 
 
-_prop_lock = threading.Lock()   # 属性存储不支持多线程并发写：串行化，否则 SetValue/Commit 随机报错
+_prop_lock = threading.RLock()   # 可重入：同一线程内诊断会再次进入写入；跨线程仍需串行（属性存储不支持并发写）
 
 
 def read_native_comment(path):

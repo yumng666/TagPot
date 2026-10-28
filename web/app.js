@@ -35,11 +35,22 @@ const S = {
 async function api(url, opt = {}) {
   const init = Object.assign({}, opt);
   if (init.body) init.headers = { 'Content-Type': 'application/json' };
-  const res = await fetch(url, init);
-  const ct = res.headers.get('content-type') || '';
-  const data = ct.includes('json') ? await res.json().catch(() => ({})) : await res.text();
-  if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
-  return data;
+  // 后端偶尔会卡（例如属性写入被系统阻塞）：加超时，别让界面一直「读取中」
+  const ac = new AbortController();
+  const timer = setTimeout(() => ac.abort(), init.timeout || 25000);
+  init.signal = ac.signal;
+  try {
+    const res = await fetch(url, init);
+    const ct = res.headers.get('content-type') || '';
+    const data = ct.includes('json') ? await res.json().catch(() => ({})) : await res.text();
+    if (!res.ok) throw new Error((data && data.error) || ('HTTP ' + res.status));
+    return data;
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('后端响应超时');
+    throw e;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /* ------------------------------------------------------------ 工具 */
