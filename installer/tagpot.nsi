@@ -8,7 +8,7 @@ Unicode true
 
 !define APPNAME     "Tag Pot"
 !define APPEXE      "TagPot.exe"
-!define APPVERSION  "1.1.0"
+!define APPVERSION  "1.1.1"
 !define PUBLISHER   "yumng666"
 !define UNINSTKEY   "Software\Microsoft\Windows\CurrentVersion\Uninstall\TagPot"
 

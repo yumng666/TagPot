@@ -33,7 +33,7 @@ except Exception as exc:  # pragma: no cover
 else:
     _IMPORT_ERROR = None
 
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 TITLE = "Tag Pot"
 ICON = os.path.join(server.RES_DIR, "assets", "tagpot.ico")
 DROP_MSG = "TagPotDrop"
@@ -277,7 +277,99 @@ def _wait_port(port, timeout=10.0):
     return False
 
 
+_MUTEX_HANDLE = None          # 保持引用，进程活着就一直占着
+_INSTANCE_MUTEX = "Local\\TagPot_SingleInstance"
+
+
+def _own_process_names():
+    names = {"tagpot.exe"}
+    try:
+        names.add(os.path.basename(sys.executable).lower())
+    except Exception:
+        pass
+    return names
+
+
+def _find_running_window():
+    """找同进程名（TagPot.exe）的可见顶层窗口。"""
+    from ctypes import wintypes
+    u32 = ctypes.windll.user32
+    k32 = ctypes.windll.kernel32
+    hits = []
+    own = _own_process_names()
+
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def cb(hwnd, _lp):
+        try:
+            if not u32.IsWindowVisible(hwnd) or u32.GetWindowTextLengthW(hwnd) <= 0:
+                return True
+            pid = wintypes.DWORD()
+            u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+            h = k32.OpenProcess(0x1000, False, pid.value)      # QUERY_LIMITED_INFORMATION
+            if h:
+                buf = ctypes.create_unicode_buffer(1024)
+                size = wintypes.DWORD(1024)
+                if k32.QueryFullProcessImageNameW(h, 0, buf, ctypes.byref(size)):
+                    if os.path.basename(buf.value).lower() in own:
+                        hits.append(hwnd)
+                k32.CloseHandle(h)
+        except Exception:
+            pass
+        return True
+
+    u32.EnumWindows(WNDENUMPROC(cb), 0)
+    return hits[0] if hits else None
+
+
+def _activate_window(hwnd):
+    """还原并置顶旧窗口；系统拒绝置顶时闪任务栏提示。"""
+    u32 = ctypes.windll.user32
+    k32 = ctypes.windll.kernel32
+    try:
+        try:
+            k32.AllowSetForegroundWindow(-1)          # ASFW_ANY：本进程有前台权时放开限制
+        except Exception:
+            pass
+        if u32.IsIconic(hwnd):
+            u32.ShowWindow(hwnd, 9)                   # SW_RESTORE
+        u32.ShowWindow(hwnd, 5)                       # SW_SHOW
+        u32.BringWindowToTop(hwnd)
+        u32.SetForegroundWindow(hwnd)
+
+        class FLASHWINFO(ctypes.Structure):
+            _fields_ = [("cbSize", ctypes.c_uint), ("hwnd", ctypes.c_void_p),
+                        ("dwFlags", ctypes.c_uint), ("uCount", ctypes.c_uint),
+                        ("dwTimeout", ctypes.c_uint)]
+
+        fi = FLASHWINFO(ctypes.sizeof(FLASHWINFO), ctypes.c_void_p(int(hwnd)),
+                        0x2 | 0xC, 3, 0)              # FLASHW_TRAY | FLASHW_TIMERNOFG
+        u32.FlashWindowEx(ctypes.byref(fi))
+        return True
+    except Exception:
+        return False
+
+
+def _claim_single_instance():
+    """第一个实例返回 True；已有实例则把它的窗口调到前台并返回 False。"""
+    global _MUTEX_HANDLE
+    k32 = ctypes.windll.kernel32
+    k32.CreateMutexW.restype = ctypes.c_void_p
+    _MUTEX_HANDLE = k32.CreateMutexW(None, False, _INSTANCE_MUTEX)
+    if k32.GetLastError() != 183:          # ERROR_ALREADY_EXISTS
+        return True
+    # 已有实例：尽力把它叫到前面，然后自己退出
+    for _ in range(6):                     # 窗口可能还在启动中，短暂重试
+        hwnd = _find_running_window()
+        if hwnd and _activate_window(hwnd):
+            return False
+        time.sleep(0.25)
+    return False
+
+
 def main():
+    if not _claim_single_instance():
+        return 0                           # 已在运行：已切到旧窗口，本进程直接退出
     if webview is None:
         _msgbox(
             "缺少桌面窗口依赖 pywebview。\n\n请在命令行执行：\n"

@@ -93,7 +93,7 @@ def welcome():
     sw = d.textlength(sub, font=f_small)
     d.text(((W - sw) / 2, 244), sub, font=f_small, fill=WHITE + (185,))
 
-    d.text((14, H - 26), "v1.1.0", font=font(10), fill=WHITE + (150,))
+    d.text((14, H - 26), "v1.1.1", font=font(10), fill=WHITE + (150,))
     img.convert("RGB").save(os.path.join(OUT_DIR, "welcome.bmp"), "BMP")
 
 
