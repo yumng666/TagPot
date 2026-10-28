@@ -14,8 +14,6 @@
 | `TagPot-Setup-1.1.0.exe` | **安装版**（推荐）。一路「下一步」即可，装到 `%LOCALAPPDATA%\Programs\TagPot`，全程不需要管理员权限；自带开始菜单、桌面快捷方式和卸载项，可在「设置 → 应用」里卸载。 |
 | `TagPot.exe` | **绿色版**。单文件约 33 MB，放进任意可写目录双击运行。 |
 
-![安装界面](tests/shots/08-setup.png)
-
 两者运行表现一致：
 
 - 冷启动约 2.7 秒（单文件要先自解包），之后窗口秒开。
@@ -178,17 +176,3 @@ TAGPOT_SELFTEST=1 python app.py   # 启动后自检并自动关闭
 
 > 注：WebView2 的画面无法被 BitBlt/PrintWindow 抓取（同环境下纯色页面抓出来也是黑的），
 > 所以窗口层用「窗口存在 + 资源全部 200 + 页面 JS 跑完整流程」来验证，视觉截图来自同款 Chromium 内核。
-
-## GitHub 同类项目检索结论
-
-开工前用 GitHub 搜索 API 检索过多组关键词（`photo gallery desktop`、`image viewer masonry`、
-`local photo manager`、`electron photo gallery` 等），结论是**有同类，但没有可直接用的一体化项目**：
-
-- **重型本地照片管理器**：`julyx10/lap`（4k★，本地 AI 搜索、文件夹优先）、
-  `OliverZhaohaibin/iPhotron`（231★，Qt6，仿 macOS 照片）、`Bitpainter75/FerrumPix`（737★）。
-  功能远超本需求，且都没有「选中态连续滑动 + 就地展开子菜单 + EXIF 备注就地编辑并自动保存」这套交互。
-- **纯浏览型**：`wlm3201/Masonry_Image_Viewer`（413★，正好是瀑布流本地图片浏览器）、
-  `dimsemenov/PhotoSwipe`（25k★，lightbox 组件）。只有「看」，没有目录树、没有备注读写。
-- **剩下的都是零件**：瀑布流布局库、灯箱库，需要自己拼装。
-
-所以这个项目是自研的，只借鉴了两点思路：灯箱的遮罩/居中策略、瀑布流的「最短列优先」放置算法。
