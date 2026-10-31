@@ -33,7 +33,7 @@ except Exception as exc:  # pragma: no cover
 else:
     _IMPORT_ERROR = None
 
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 TITLE = "Tag Pot"
 ICON = os.path.join(server.RES_DIR, "assets", "tagpot.ico")
 DROP_MSG = "TagPotDrop"

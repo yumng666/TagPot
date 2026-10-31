@@ -873,7 +873,8 @@ def _autowrite_tree(root):
     for r, _dirs, fs in os.walk(root):
         for f in fs:
             fp = os.path.join(r, f)
-            if f in ("_tagpot_wtest.png",) or f.endswith(".tagpottest.png"):
+            if (f in ("_tagpot_wtest.png",) or f.endswith(".tagpottest.png")
+                    or f.endswith(".tagpot.tmp")):
                 try:
                     os.remove(fp)          # 早期诊断留下的临时图，顺手清掉
                 except Exception:
@@ -1251,27 +1252,36 @@ def _read_native_comment_locked(path, pk):
 def write_native_comment(path, text, tries=3):
     """把备注写回 Windows 属性。成功返回 True。
 
-    属性存储偶尔会被杀软/索引器短暂占用，重试几次基本都能过。
+    属性存储偶尔会被杀软/索引器短暂占用，重试几次基本都能过；
+    个别文件（例如工作流里做过局部重绘的图）属性处理器会一直拒绝（0x401A0），
+    这时退回到直接改写 PNG 的 XMP 块 —— 资源管理器同样能看到备注。
     """
     pk = _pk_comment()
     if pk is None:
         return False
     with _prop_lock:
-        return _write_native_comment_locked(path, text, pk, tries)
+        ok, reason = _write_native_comment_locked(path, text, pk, tries)
+        if ok:
+            return True
+    if _png_set_comment_xmp(path, text):
+        _log_genmeta(path, {}, (reason + " → 已改用 XMP 直写") if reason else "已改用 XMP 直写")
+        return True
+    _log_genmeta(path, {}, (reason or "写入失败") + " → XMP 直写也失败")
+    return False
 
 
 def _write_native_comment_locked(path, text, pk, tries):
+    """返回 (是否成功, 失败原因)。返回前一定已释放属性存储。"""
     store = None
-    last = "open"
+    reason = ""
     for attempt in range(tries):
         store, hr = _open_propstore_hr(path, True)
         if store is not None:
             break
-        last = "open hr=0x%08X" % (hr & 0xFFFFFFFF)
+        reason = "属性存储打不开 hr=0x%08X" % (hr & 0xFFFFFFFF)
         time.sleep(0.12)
     if store is None:
-        _log_genmeta(path, {}, "属性存储打不开（" + last + "）")
-        return False
+        return False, reason
     try:
         buf = ctypes.create_unicode_buffer(text or "")
         pv = _PROPVARIANT()
@@ -1281,22 +1291,121 @@ def _write_native_comment_locked(path, text, pk, tries):
         fn = _vfn(store, 6, ctypes.POINTER(_PROPERTYKEY), ctypes.POINTER(_PROPVARIANT))
         hr = fn(store, ctypes.byref(pk), ctypes.byref(pv))
         if hr != 0:
-            _log_genmeta(path, {}, "SetValue 失败 hr=0x%08X 诊断=%s"
-                         % (hr & 0xFFFFFFFF, json.dumps(_diag_write(path), ensure_ascii=False)))
-            return False
+            return False, "SetValue 失败 hr=0x%08X" % (hr & 0xFFFFFFFF)
         hr = _vfn(store, 7)(store)   # Commit
         if hr != 0:
-            _log_genmeta(path, {}, "Commit 失败 hr=0x%08X" % (hr & 0xFFFFFFFF))
-            return False
-        return True
+            return False, "Commit 失败 hr=0x%08X" % (hr & 0xFFFFFFFF)
+        return True, ""
     except Exception as exc:
-        _log_genmeta(path, {}, "写入异常 " + repr(exc))
-        return False
+        return False, "写入异常 " + repr(exc)
     finally:
         try:
             _vfn(store, 2)(store)
         except Exception:
             pass
+
+
+# ----------------------------------------------------------------- 备注直写（PNG / XMP 兜底）
+def _xml_escape(t):
+    return (str(t).replace("&", "&amp;").replace("<", "&lt;")
+            .replace(">", "&gt;").replace('"', "&quot;"))
+
+
+_XMP_SHELL = ('<?xpacket begin="\ufeff" id="W5M0MpCehiHzreSzNTczkc9d"?>'
+              '<x:xmpmeta xmlns:x="adobe:ns:meta/">'
+              '<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">'
+              '<rdf:Description rdf:about="" xmlns:exif="http://ns.adobe.com/exif/1.0/">'
+              '%s</rdf:Description></rdf:RDF></x:xmpmeta><?xpacket end="w"?>')
+
+
+def _xmp_with_comment(old, text):
+    """把备注塞进 XMP，保留已有其它字段。"""
+    node = ('<exif:UserComment><rdf:Alt><rdf:li xml:lang="x-default">%s</rdf:li>'
+            '</rdf:Alt></exif:UserComment>' % _xml_escape(text))
+    if old:
+        m = re.search(r"<exif:UserComment>.*?</exif:UserComment>", old, re.S)
+        if m:
+            return old[:m.start()] + node + old[m.end():]
+        m = re.search(r"<rdf:Description[^>]*>", old, re.S)
+        if m:
+            head = m.group(0)
+            if "xmlns:exif" not in head:
+                fixed = head.replace("<rdf:Description",
+                                     '<rdf:Description xmlns:exif="http://ns.adobe.com/exif/1.0/"', 1)
+                old = old[:m.start()] + fixed + old[m.end():]
+                m = re.search(r"<rdf:Description[^>]*>", old, re.S)
+            return old[:m.end()] + node + old[m.end():]
+    return _XMP_SHELL % node
+
+
+def _png_chunk(ctype, data):
+    import struct
+    import zlib
+    return (struct.pack(">I", len(data)) + ctype + data
+            + struct.pack(">I", zlib.crc32(ctype + data) & 0xFFFFFFFF))
+
+
+def _itxt_text(data):
+    """iTXt 块数据取文本：keyword\0 + 压缩标记 + 方法 + 语言\0 + 译文\0 + 文本。"""
+    try:
+        import zlib
+        _kw, _, rest = data.partition(b"\x00")
+        comp = rest[:1]
+        rest = rest[2:]
+        _lang, _, rest = rest.partition(b"\x00")
+        _trans, _, txt = rest.partition(b"\x00")
+        if comp == b"\x01":
+            txt = zlib.decompress(txt)
+        return txt.decode("utf-8", "ignore")
+    except Exception:
+        return ""
+
+
+def _png_set_comment_xmp(path, text):
+    """直接改写 PNG 的 XMP 块写备注（属性处理器拒绝时的兜底）。"""
+    try:
+        with open(path, "rb") as f:
+            raw = f.read()
+        if raw[:8] != b"\x89PNG\r\n\x1a\n":
+            return False
+        chunks = []
+        old_xmp = ""
+        pos = 8
+        while pos + 8 <= len(raw):
+            ln = int.from_bytes(raw[pos:pos + 4], "big")
+            ct = raw[pos + 4:pos + 8]
+            if pos + 12 + ln > len(raw):
+                break
+            data = raw[pos + 8:pos + 8 + ln]
+            pos += 12 + ln
+            if ct in (b"iTXt", b"tEXt") and data.startswith(b"XML:com.adobe.xmp"):
+                if ct == b"iTXt":
+                    old_xmp = _itxt_text(data) or old_xmp
+                else:
+                    _k, _, v = data.partition(b"\x00")
+                    old_xmp = old_xmp or v.decode("latin-1", "ignore")
+                continue                      # 旧的 XMP（tEXt/iTXt）统一丢掉，只留一份新的
+            chunks.append((ct, data))
+            if ct == b"IEND":
+                break
+        if not any(ct == b"IDAT" for ct, _ in chunks):
+            return False
+        payload = (b"XML:com.adobe.xmp" + b"\x00\x00\x00\x00\x00"
+                   + _xmp_with_comment(old_xmp, text).encode("utf-8"))
+        out = bytearray(raw[:8])
+        inserted = False
+        for ct, data in chunks:
+            if ct == b"IDAT" and not inserted:
+                out += _png_chunk(b"iTXt", payload)
+                inserted = True
+            out += _png_chunk(ct, data)
+        tmp = path + ".tagpot.tmp"
+        with open(tmp, "wb") as f:
+            f.write(out)
+        os.replace(tmp, path)
+        return True
+    except Exception:
+        return False
 
 
 # --------------------------------------------------------------------------- 备注（EXIF 兜底）
