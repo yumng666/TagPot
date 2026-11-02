@@ -246,6 +246,30 @@ def main():
         check("强度 0 的 Lora 被过滤", [x["name"] for x in gz["loras"]], ["on_lora"])
         check("保留的强度正确", gz["loras"][0]["strength"], 0.8)
 
+        print("\n[分段提示词节点 AnimaPromptPlus]")
+        seg = os.path.join(tmp, "seg.png")
+        make_png(seg, {"prompt": json.dumps({
+            "182": {"class_type": "LoraLoaderModelOnly",
+                    "inputs": {"lora_name": "Anima\\yumng_anima_3-000023.safetensors",
+                               "strength_model": 1.0}},
+            "208": {"class_type": "AnimaPromptPlus", "inputs": {
+                "quality_prompt": "(Masterpiece,best quality,highres,score_9,ultra detailed:1.2),solo,1girl",
+                "artist_tags": "@yumng",
+                "character_tags": "giprune,purple eyes",
+                "clothing_tags": "black gloves,white dress",
+                "pose_tags": "sitting,looking at viewer",
+                "background_tags": "detail background,indoors",
+                "extra_prompt": "",
+                "separator": ", "}},
+        })})
+        gs = server.read_gen_meta(seg)
+        check("分段提示词被整合", gs["prompt"],
+              "(Masterpiece, best quality, highres, score_9, ultra detailed:1.2), solo, 1girl, "
+              "@yumng, giprune, purple eyes, black gloves, white dress, sitting, looking at viewer, "
+              "detail background, indoors")
+        check("分段节点同图的 Lora 仍识别", [x["name"] for x in gs["loras"]],
+              ["yumng_anima_3-000023"])
+
         print("\n[A1111 WebUI parameters]")
         a111 = os.path.join(tmp, "a1111.png")
         make_png(a111, {"parameters": (

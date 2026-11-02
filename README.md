@@ -11,7 +11,7 @@
 
 | 文件 | 说明 |
 | --- | --- |
-| `TagPot-Setup-1.1.2.exe` | **安装版**（推荐）。一路「下一步」即可，装到 `%LOCALAPPDATA%\Programs\TagPot`，全程不需要管理员权限；自带开始菜单、桌面快捷方式和卸载项，可在「设置 → 应用」里卸载。 |
+| `TagPot-Setup-1.1.3.exe` | **安装版**（推荐）。一路「下一步」即可，装到 `%LOCALAPPDATA%\Programs\TagPot`，全程不需要管理员权限；自带开始菜单、桌面快捷方式和卸载项，可在「设置 → 应用」里卸载。 |
 | `TagPot.exe` | **绿色版**。单文件约 33 MB，放进任意可写目录双击运行。 |
 
 两者运行表现一致：
@@ -26,6 +26,10 @@
 - 若 Windows 弹 SmartScreen，是因为 exe 没有代码签名：点「更多信息 → 仍要运行」。
 
 ## 更新日志
+
+### v1.1.3
+
+- **分段提示词节点**：有些工作流（如 AnimaPromptPlus）把提示词拆成 `quality_prompt`、`artist_tags`、`character_tags`、`clothing_tags`、`pose_tags`、`background_tags`、`extra_prompt` 多个字段，正向 CLIPTextEncode 只是连线、取不到整段文本。现在识别不到普通提示词时会按上述顺序把它们整合成完整提示词（空字段跳过，逗号统一成「, 」）
 
 ### v1.1.2
 

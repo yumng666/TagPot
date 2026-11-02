@@ -659,6 +659,41 @@ def _comfy_prompts(nodes):
     return (texts[0] if texts else ""), ""
 
 
+# 分段提示词节点（AnimaPromptPlus 等）：正向只是连到这些字段，没有整段文本
+_ANIMA_FIELDS = ("quality_prompt", "artist_tags", "character_tags",
+                 "clothing_tags", "pose_tags", "background_tags", "extra_prompt")
+
+
+def _join_tags(parts):
+    """按顺序拼各段提示词：段内/段间统一成 ", "，丢掉空段与多余逗号。"""
+    out = []
+    for p in parts:
+        if not isinstance(p, str):
+            continue
+        for item in p.split(","):
+            item = item.strip()
+            if item:
+                out.append(item)
+    return ", ".join(out)
+
+
+def _segmented_prompt(nodes):
+    """从分段提示词节点里整合出完整提示词（识别不到普通正向文本时兜底）。"""
+    parts = []
+    for pid in sorted(nodes, key=lambda k: (len(str(k)), str(k))):
+        node = nodes[pid]
+        if not isinstance(node, dict):
+            continue
+        inputs = node.get("inputs") or {}
+        if not any(k in inputs for k in _ANIMA_FIELDS):
+            continue
+        for k in _ANIMA_FIELDS:
+            v = inputs.get(k)
+            if isinstance(v, str) and v.strip():
+                parts.append(v)
+    return _join_tags(parts)
+
+
 def _parse_comfy(nodes):
     model, loras = "", []
     for node in nodes.values():
@@ -682,6 +717,8 @@ def _parse_comfy(nodes):
                 continue
             loras.extend(_parse_lora_list(val))
     pos, neg = _comfy_prompts(nodes)
+    if not pos.strip():
+        pos = _segmented_prompt(nodes)
     return model, loras, pos, neg
 
 
