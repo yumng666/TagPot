@@ -1,9 +1,33 @@
+<div align="center">
+
+<img src="assets/tagpot.png" width="120" alt="Tag Pot">
+
 # Tag Pot
 
-本地相册画廊，是一个 **Windows 桌面软件**：独立窗口、任务栏图标、无地址栏、不经过浏览器。
-蓝白主题，左侧文件夹导航，右侧瀑布流，点击图片进入属性弹窗。全程离线，图片不出本机。
+**本地画廊 · 把生成参数写进图片的「备注」**
 
-![概览](tests/shots/01-initial.png)
+一个 **Windows 桌面软件**：独立窗口、任务栏图标、无地址栏、不经过浏览器。
+蓝白主题，左侧文件夹导航，右侧瀑布流，点开图片看提示词与模型 / Lora。
+全程离线，图片不出本机。
+
+![release](https://img.shields.io/github/v/release/yumng666/TagPot?style=flat-square&color=2563eb)
+![downloads](https://img.shields.io/github/downloads/yumng666/TagPot/total?style=flat-square&color=059669)
+![stars](https://img.shields.io/github/stars/yumng666/TagPot?style=flat-square&color=f59e0b)
+
+📥 [下载客户端](https://github.com/yumng666/TagPot/releases/latest) · 💬 [反馈问题](https://github.com/yumng666/TagPot/issues)
+
+<img src="tests/shots/01-initial.png" width="880" alt="概览">
+
+</div>
+
+**v1.1.0 起**：自动识别 **ComfyUI / NovelAI / A1111（WebUI）** 三种生成参数，
+把提示词、模型与 Lora 一并读出，并自动写进图片的 **Windows「备注」属性**——
+在资源管理器里直接可见；已存在备注的图不覆盖，新图自动补写。
+
+**v1.1.4 起**：看图界面按窗口宽度**自适应列数**（最大 12 列），
+最大化窗口不再只显示一屏；**切换文件夹自动回到顶部**。
+
+---
 
 ## 安装
 
