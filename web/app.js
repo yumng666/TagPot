@@ -549,6 +549,11 @@ async function syncTree(hintPath, dirsHint) {
 /* ------------------------------------------------------------ 右侧：瀑布流 */
 async function loadFolder(node) {
   const token = ++S.loadToken;
+  if (node.path !== S.folderPath) {
+    // 换到别的文件夹：滚动位置回到最顶部
+    const stage = document.querySelector('.stage');
+    if (stage) stage.scrollTop = 0;
+  }
   try {
     const d = await api('/api/images?path=' + enc(node.path));
     if (token !== S.loadToken) return;
@@ -670,16 +675,19 @@ function layout() {
   const W = masonry.clientWidth;
   if (!W) return;
   const gap = 16;
-  let cols = Math.floor((W + gap) / (238 + gap));
-  cols = Math.max(2, Math.min(6, cols));
+  // 按目标列宽铺满可用宽度：窗口越大列越多，不再固定最多 6 列
+  const TARGET = 236;
+  let cols = Math.round((W + gap) / (TARGET + gap));
+  cols = Math.max(2, Math.min(12, cols));
   const colW = (W - gap * (cols - 1)) / cols;
   const hs = new Array(cols).fill(0);
+  const capH = Math.round(colW * 1.55);   // 竖图限高，避免单列被拉得过高
 
   S.images.forEach(it => {
     const rec = S.tiles.get(it.path);
     if (!rec) return;
     const ratio = (it.w && it.h) ? it.h / it.w : 1.32;
-    const h = Math.max(96, Math.round(colW * ratio));
+    const h = Math.min(capH, Math.max(96, Math.round(colW * ratio)));
     let c = 0;
     for (let i = 1; i < cols; i++) if (hs[i] < hs[c] - 0.5) c = i;
     const x = Math.round(c * (colW + gap));
@@ -1314,13 +1322,20 @@ function bindUI() {
   });
 
   let rt = 0;
-  window.addEventListener('resize', () => {
+  const relayout = () => {
     clearTimeout(rt);
     rt = setTimeout(() => {
       placeSel();
       layout();
-    }, 120);
-  });
+    }, 80);
+  };
+  window.addEventListener('resize', relayout);
+  // 桌面壳里窗口最大化/还原不一定会触发 window.resize，盯住容器本身
+  if (window.ResizeObserver) {
+    const ro = new ResizeObserver(relayout);
+    const stage = document.querySelector('.stage');
+    if (stage) ro.observe(stage);
+  }
 }
 
 /* ------------------------------------------------------------ 桌面外壳适配 */

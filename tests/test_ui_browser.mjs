@@ -184,9 +184,10 @@ try {
   check('子菜单已就地展开', await cdp.eval(
     `(()=>{const g=[...document.querySelectorAll('#menu > .group')].find(g=>g.dataset.path===${JSON.stringify(parent.path)}); return g.querySelector('.sub').offsetHeight;})()`
   ), (v) => v > 30);
+  // 侧栏按修改时间排序，这里只校验集合一致（顺序另有用例）
   check('子项文本与后端一致', await cdp.eval(
-    `(()=>{const g=[...document.querySelectorAll('#menu > .group')].find(g=>g.dataset.path===${JSON.stringify(parent.path)}); return [...g.querySelectorAll('.sub > .sub-inner .label')].map(e=>e.textContent).join(',');})()`
-  ), (await apiDirs(parent.path)).map((d) => d.name).join(','));
+    `(()=>{const g=[...document.querySelectorAll('#menu > .group')].find(g=>g.dataset.path===${JSON.stringify(parent.path)}); return [...g.querySelectorAll('.sub > .sub-inner .label')].map(e=>e.textContent).sort().join(',');})()`
+  ), (await apiDirs(parent.path)).map((d) => d.name).sort().join(','));
   check('选中块贴合当前项（位置+尺寸）', await cdp.eval(`(() => {
     const sel = document.getElementById('sel');
     const item = document.querySelector('#menu .item.active');

@@ -328,8 +328,10 @@ body {
 .stage {
   flex: 1;
   min-width: 0;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
+  overscroll-behavior: contain;
   position: relative;
   background:
     radial-gradient(900px 420px at 12% -8%, #e9f1ff 0%, rgba(233, 241, 255, 0) 62%),
