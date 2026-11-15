@@ -1341,6 +1341,17 @@ function bindUI() {
 /* ------------------------------------------------------------ 桌面外壳适配 */
 const DESKTOP = new URLSearchParams(location.search).get('shell') === 'desktop';
 
+// 中键自动滚动（WebView2/Edge 内核自带）：会弹出圆形小箭头并让视图跟着鼠标跑。
+// 本应用里中键没有别的用途，直接全部拦掉。
+['mousedown', 'auxclick'].forEach(t =>
+  window.addEventListener(t, e => {
+    if (e.button === 1) {
+      e.preventDefault();
+      e.stopPropagation();
+    }
+  }, true)
+);
+
 function shellTweaks() {
   // 桌面窗口里不需要浏览器那套默认右键菜单
   if (DESKTOP) document.addEventListener('contextmenu', e => e.preventDefault());

@@ -33,7 +33,7 @@ except Exception as exc:  # pragma: no cover
 else:
     _IMPORT_ERROR = None
 
-VERSION = "1.1.4"
+VERSION = "1.1.5"
 TITLE = "Tag Pot"
 ICON = os.path.join(server.RES_DIR, "assets", "tagpot.ico")
 DROP_MSG = "TagPotDrop"
@@ -394,6 +394,9 @@ def main():
     url = "http://127.0.0.1:%d/?shell=desktop" % port
 
     w, h = _window_size()
+    # 关掉内核自带的中键自动滚动（页面里也有一层 JS 拦截，双保险）
+    os.environ.setdefault("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",
+                          "--disable-features=MiddleClickAutoscroll")
     webview.create_window(
         TITLE,
         url,

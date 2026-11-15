@@ -35,6 +35,6 @@ if errorlevel 1 (
 )
 
 echo.
-echo   Done: %~dp0dist\TagPot-Setup-1.1.4.exe
+echo   Done: %~dp0dist\TagPot-Setup-1.1.5.exe
 echo.
 pause
